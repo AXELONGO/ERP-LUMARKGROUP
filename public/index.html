@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#ea580c">
+  <link rel="manifest" href="/manifest.json">
+  <title>ERP LUMARK — Panel de Control</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- FullCalendar -->
+  <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+  <!-- Phosphor Icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <link rel="stylesheet" href="style.css?v=3">
+</head>
+<body>
+
+  <div class="modal-overlay hidden" id="dateFilterModal" onclick="if(event.target===this) closeDateFilter()">
+    <div class="modal" style="max-width: 400px; width: 100%;">
+      <div class="modal-header">
+        <h2 class="modal-title">Filtrar por Fecha de Registro</h2>
+        <button class="modal-close" onclick="closeDateFilter()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Desde</label>
+          <input type="date" id="filterDateStart">
+        </div>
+        <div class="form-group">
+          <label>Hasta</label>
+          <input type="date" id="filterDateEnd">
+        </div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+          <button class="btn btn-outline" style="flex:1;" onclick="clearDateFilter()">Limpiar</button>
+          <button class="btn btn-primary" style="flex:1;" onclick="applyDateFilter()">Aplicar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<!-- ── SIDEBAR OVERLAY (MOBILE) ────────────────────────────── -->
+<div id="sidebarOverlay" class="sidebar-overlay hidden"></div>
+
+<!-- ── SIDEBAR ─────────────────────────────────────────────── -->
+<aside class="sidebar mini" id="sidebar">
+  <div class="sidebar-logo" style="padding: 20px 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: padding 0.3s;" onclick="document.getElementById('sidebar').classList.toggle('mini')" title="Expandir/Contraer Menú">
+    <div class="logo-mask" style="width: 100%; height: 40px; background: var(--primary-grad); -webkit-mask: url(/logo.png) no-repeat left center / auto 32px; mask: url(/logo.png) no-repeat left center / auto 32px; transition: width 0.3s;" title="LUMARK Logo"></div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">PRINCIPAL</div>
+    <a href="#" class="nav-item active" data-section="dashboard" id="nav-dashboard">
+      <span class="nav-icon"><i class="ph ph-squares-four"></i></span><span>Dashboard</span>
+    </a>
+    <a href="#" class="nav-item" data-section="prospectos" id="nav-prospectos">
+      <span class="nav-icon"><i class="ph ph-target"></i></span><span>Prospectos</span>
+    </a>
+    <a href="#" class="nav-item" data-section="clientes" id="nav-clientes">
+      <span class="nav-icon"><i class="ph ph-users"></i></span><span>Clientes</span>
+    </a>
+
+    <div class="nav-section-label">OPERACIÓN</div>
+    <a href="#" class="nav-item" data-section="proyectos" id="nav-proyectos">
+      <span class="nav-icon"><i class="ph ph-rocket-launch"></i></span><span>Proyectos</span>
+    </a>
+    <a href="#" class="nav-item" data-section="pipeline" id="nav-pipeline">
+      <span class="nav-icon"><i class="ph ph-kanban"></i></span><span>Pipeline</span>
+    </a>
+    <a href="#" class="nav-item" data-section="tareas" id="nav-tareas">
+      <span class="nav-icon"><i class="ph ph-list-checks"></i></span><span>Tareas</span>
+    </a>
+    <a href="#" class="nav-item" data-section="citas" id="nav-citas">
+      <span class="nav-icon"><i class="ph ph-calendar"></i></span><span>Citas</span>
+    </a>
+
+    <div class="nav-section-label">MÉTRICAS</div>
+    <a href="#" class="nav-item" data-section="actividades" id="nav-actividades">
+      <span class="nav-icon"><i class="ph ph-lightning"></i></span><span>Registrar Actividad</span>
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="user-avatar">A</div>
+    <div class="user-info">
+      <div class="user-name">Axel S.</div>
+      <div class="user-role">Administrador</div>
+    </div>
+  </div>
+</aside>
+
+<!-- ── MAIN ────────────────────────────────────────────────── -->
+<main class="main-content">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-left" style="display: flex; align-items: center; gap: 12px;">
+      <button id="menuToggle" class="btn btn-outline menu-toggle" style="display: none; padding: 4px 8px; border: none; font-size: 20px;"><i class="ph ph-list"></i></button>
+      <div>
+        <h1 class="page-title" id="pageTitle">Dashboard</h1>
+        <span class="page-sub" id="pageSub">Vista general del negocio</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button class="btn btn-outline" id="btnFilterDate" onclick="openDateFilter()"><i class="ph ph-calendar"></i> Fechas</button>
+      <button class="btn btn-outline" id="btnDeleteMode" style="display:none;" onclick="toggleDeleteMode()"><i class="ph ph-trash"></i> <span id="textDeleteMode">Eliminar</span></button>
+      <button class="btn btn-outline" onclick="refreshData()">↻ Actualizar</button>
+      <button class="btn btn-primary" id="btnAdd" onclick="openModal()">+ Nuevo Registro</button>
+    </div>
+  </header>
+
+  <!-- ── DASHBOARD ─────────────────────────────────────────── -->
+  <section class="section" id="section-dashboard">
+    <style>
+      .welcome-banner {
+        background: var(--blue-light);
+        border-radius: var(--radius);
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-bottom: 24px;
+        position: relative;
+        overflow: hidden;
+      }
+      .welcome-banner::after {
+        content: "";
+        position: absolute;
+        top: 0; right: 0; bottom: 0; width: 40%;
+        background: linear-gradient(270deg, rgba(124,58,237,0.1) 0%, transparent 100%);
+        pointer-events: none;
+      }
+      .welcome-title { font-size: 24px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px;}
+      .welcome-info { display: flex; gap: 20px; align-items: center; background: var(--surface); padding: 16px; border-radius: var(--radius-sm); box-shadow: var(--shadow); z-index: 1; position: relative;}
+      .welcome-info .logo-box { background: var(--blue); color: white; width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; }
+      
+      .dashboard-section-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--text);
+        margin: 2rem 0 1rem 0;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border);
+      }
+      .dashboard-section-title:first-child { margin-top: 0; }
+      .chart-title { font-size: 13px; font-weight: 600; color: var(--text2); }
+    </style>
+
+
+
+    <!-- 1. Comercial -->
+    <h2 class="dashboard-section-title">Comercial (Entrada y Seguimiento)</h2>
+    <div class="kpi-grid">
+      <div class="kpi-card accent-blue">
+        <div class="kpi-icon"><i class="ph ph-user-plus"></i></div>
+        <div class="kpi-value" id="kpiNuevosProspectos">0</div>
+        <div class="kpi-label">Nuevos Prospectos</div>
+      </div>
+      <div class="kpi-card accent-purple">
+        <div class="kpi-icon"><i class="ph ph-calendar-check"></i></div>
+        <div class="kpi-value" id="kpiCitas">0</div>
+        <div class="kpi-label">Citas Totales</div>
+      </div>
+      <div class="kpi-card accent-green">
+        <div class="kpi-icon"><i class="ph ph-target"></i></div>
+        <div class="kpi-value" id="kpiShowRate">0%</div>
+        <div class="kpi-label">Show Rate (Citas Exitosas)</div>
+      </div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-header"><h3 class="chart-title">Prospectos por Asesor</h3></div>
+        <div style="position: relative; height: 250px; width: 100%;"><canvas id="chartProspectosAsesor"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><h3 class="chart-title">Citas por Responsable</h3></div>
+        <div style="position: relative; height: 250px; width: 100%;"><canvas id="chartCitasResponsable"></canvas></div>
+      </div>
+    </div>
+
+    <!-- 2. Financiero y Retención -->
+    <h2 class="dashboard-section-title">Financiero y Retención (Clientes)</h2>
+    <div class="kpi-grid">
+      <div class="kpi-card accent-green">
+        <div class="kpi-icon"><i class="ph ph-currency-dollar"></i></div>
+        <div class="kpi-value" id="kpiMRR">$0</div>
+        <div class="kpi-label">MRR (Mensual)</div>
+      </div>
+      <div class="kpi-card accent-yellow">
+        <div class="kpi-icon"><i class="ph ph-arrows-clockwise"></i></div>
+        <div class="kpi-value" id="kpiRenovaciones">0</div>
+        <div class="kpi-label">Renovaciones Próximas (30 días)</div>
+      </div>
+      <div class="kpi-card accent-blue">
+        <div class="kpi-icon"><i class="ph ph-users"></i></div>
+        <div class="kpi-value" id="kpiTotalClientes">0</div>
+        <div class="kpi-label">Total de Clientes</div>
+      </div>
+    </div>
+
+    <!-- 3. Operación y Ejecución -->
+    <h2 class="dashboard-section-title">Operación, Ejecución y Pipeline</h2>
+    <div class="kpi-grid">
+      <div class="kpi-card accent-blue">
+        <div class="kpi-icon"><i class="ph ph-percent"></i></div>
+        <div class="kpi-value" id="kpiAvancePromedio">0%</div>
+        <div class="kpi-label">Avance Promedio (Proyectos)</div>
+      </div>
+      <div class="kpi-card accent-red">
+        <div class="kpi-icon"><i class="ph ph-warning-octagon"></i></div>
+        <div class="kpi-value" id="kpiProyectosRiesgo">0</div>
+        <div class="kpi-label">Proyectos en Riesgo</div>
+      </div>
+      <div class="kpi-card accent-yellow">
+        <div class="kpi-icon"><i class="ph ph-clock"></i></div>
+        <div class="kpi-value" id="kpiDiasSinMovimiento">0</div>
+        <div class="kpi-label">Días sin mov. (Promedio)</div>
+      </div>
+      <div class="kpi-card accent-purple">
+        <div class="kpi-icon"><i class="ph ph-hourglass-medium"></i></div>
+        <div class="kpi-value" id="kpiTiempoEtapa">0</div>
+        <div class="kpi-label">Días promedio por Etapa (Pipeline)</div>
+      </div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-header"><h3 class="chart-title">Proyectos por Etapa (Pipeline)</h3></div>
+        <div style="position: relative; height: 250px; width: 100%;"><canvas id="chartPipelineEtapas"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><h3 class="chart-title">Servicios Más Vendidos</h3></div>
+        <div style="position: relative; height: 250px; width: 100%;"><canvas id="chartServicios"></canvas></div>
+      </div>
+    </div>
+
+    <!-- 4. Productividad Interna y Actividades -->
+    <h2 class="dashboard-section-title">Productividad Interna y Actividades</h2>
+    <div class="kpi-grid">
+      <div class="kpi-card accent-green">
+        <div class="kpi-icon"><i class="ph ph-check-circle"></i></div>
+        <div class="kpi-value" id="kpiTareasCompletadas">0</div>
+        <div class="kpi-label">Tareas Completadas</div>
+      </div>
+      <div class="kpi-card accent-blue">
+        <div class="kpi-icon"><i class="ph ph-calendar-check"></i></div>
+        <div class="kpi-value" id="kpiCumplimientoFechas">0%</div>
+        <div class="kpi-label">Cumplimiento de Fechas (Tareas)</div>
+      </div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-header"><h3 class="chart-title">Volumen por Indicador (Actividades)</h3></div>
+        <div style="position: relative; height: 250px; width: 100%;"><canvas id="chartActividadesIndicador"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><h3 class="chart-title">Actividad por Responsable</h3></div>
+        <div style="position: relative; height: 250px; width: 100%;"><canvas id="chartActividadesResponsable"></canvas></div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ── PROSPECTOS ─────────────────────────────────────────── -->
+  <section class="section hidden" id="section-prospectos">
+    <div class="table-toolbar">
+      <input type="text" class="search-input" placeholder="Buscar prospecto..." oninput="filterTable('tableProspectos', this.value)">
+      <button id="btnCampana" class="btn btn-primary" style="background: linear-gradient(135deg,#7c3aed,#4f46e5); border:none; gap:6px; display:flex; align-items:center;" onclick="openCampanaModal()">
+        <i class="ph ph-megaphone"></i> Campaña
+      </button>
+    </div>
+    <div class="table-card">
+      <table id="tableProspectos">
+        <thead><tr><th>ID</th><th>Nombre</th><th>Correo</th><th>Teléfono</th><th>Medio de Contacto</th><th>Fecha Registro</th><th>Notas</th><th>Asesor</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── CLIENTES ───────────────────────────────────────────── -->
+  <section class="section hidden" id="section-clientes">
+    <div class="table-toolbar">
+      <input type="text" class="search-input" placeholder="Buscar cliente..." oninput="filterTable('tableClientes', this.value)">
+    </div>
+    <div class="table-card">
+      <table id="tableClientes">
+        <thead><tr><th>ID</th><th>Nombre</th><th>Empresa</th><th>Correo</th><th>Teléfono</th><th>Estado</th><th>Servicio</th><th>Valor Mensual</th><th>Prioridad</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── PROYECTOS ──────────────────────────────────────────── -->
+  <section class="section hidden" id="section-proyectos">
+    <div class="table-toolbar">
+      <input type="text" class="search-input" placeholder="Buscar proyecto..." oninput="filterTable('tableProyectos', this.value)">
+      <button id="btnReporte" class="btn btn-primary" style="background: linear-gradient(135deg,#0ea5e9,#2563eb); border:none; gap:6px; display:flex; align-items:center;" onclick="openReporteModal()">
+        <i class="ph ph-chart-line-up"></i> Reporte
+      </button>
+    </div>
+    <div class="table-card">
+      <table id="tableProyectos">
+        <thead><tr><th>ID</th><th>Nombre</th><th>Cliente</th><th>Servicio</th><th>Estado</th><th>Etapa</th><th>% Avance</th><th>Prioridad</th><th>Riesgo</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── PIPELINE ───────────────────────────────────────────── -->
+  <section class="section hidden" id="section-pipeline">
+    <div class="table-toolbar">
+      <input type="text" class="search-input" placeholder="Buscar en pipeline..." oninput="filterKanban('kanban-pipeline', this.value)">
+    </div>
+    <div class="kanban-board" id="kanban-pipeline">
+      <div class="kanban-col" data-status="1">
+        <h3 class="kanban-col-title">1 → Activación <span class="kanban-count">0</span></h3>
+        <div class="kanban-cards"></div>
+      </div>
+      <div class="kanban-col" data-status="2">
+        <h3 class="kanban-col-title">2 → Diagnóstico <span class="kanban-count">0</span></h3>
+        <div class="kanban-cards"></div>
+      </div>
+      <div class="kanban-col" data-status="3">
+        <h3 class="kanban-col-title">3 → Calendario de Cont. <span class="kanban-count">0</span></h3>
+        <div class="kanban-cards"></div>
+      </div>
+      <div class="kanban-col" data-status="4">
+        <h3 class="kanban-col-title">4 → Creación Cont. <span class="kanban-count">0</span></h3>
+        <div class="kanban-cards"></div>
+      </div>
+      <div class="kanban-col" data-status="5">
+        <h3 class="kanban-col-title">5 → Campaña <span class="kanban-count">0</span></h3>
+        <div class="kanban-cards"></div>
+      </div>
+      <div class="kanban-col" data-status="6">
+        <h3 class="kanban-col-title">6 → Reporte de Res. <span class="kanban-count">0</span></h3>
+        <div class="kanban-cards"></div>
+      </div>
+      <div class="kanban-col" data-status="7">
+        <h3 class="kanban-col-title">7 → Renovación <span class="kanban-count">0</span></h3>
+        <div class="kanban-cards"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── TAREAS ─────────────────────────────────────────────── -->
+  <section class="section hidden" id="section-tareas">
+    <div class="table-toolbar">
+      <input type="text" class="search-input" placeholder="Buscar tarea..." oninput="filterKanban('kanban-tareas', this.value)">
+    </div>
+    <div class="kanban-board" id="kanban-tareas">
+      <div class="kanban-col" data-status="Pendiente">
+        <h3 class="kanban-col-title">Pendiente <span class="kanban-count">0</span></h3>
+        <div class="kanban-cards"></div>
+      </div>
+      <div class="kanban-col" data-status="En Proceso">
+        <h3 class="kanban-col-title">En Proceso <span class="kanban-count">0</span></h3>
+        <div class="kanban-cards"></div>
+      </div>
+      <div class="kanban-col" data-status="Terminado">
+        <h3 class="kanban-col-title">Terminado <span class="kanban-count">0</span></h3>
+        <div class="kanban-cards"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CITAS ─────────────────────────────────────────────── -->
+  <section class="section hidden" id="section-citas">
+    <div class="calendar-container">
+      <div id="calendar"></div>
+    </div>
+  </section>
+
+  <!-- ── REGISTRO ACTIVIDADES ───────────────────────────────── -->
+  <section class="section hidden" id="section-actividades">
+    <div class="form-card standalone">
+      <h3 class="form-title">Registrar Actividad del Día</h3>
+      <form id="formActividad" onsubmit="submitActividad(event)">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Fecha</label>
+            <input type="date" id="act-fecha" required>
+          </div>
+          <div class="form-group">
+            <label>Tipo de Indicador</label>
+            <select id="act-tipo" required>
+              <option value="">Seleccionar...</option>
+              <option>Llamadas / prospección</option>
+              <option>Creativos</option>
+              <option>Videos</option>
+              <option>Creación de contenido empresa</option>
+              <option>Marcas personales</option>
+              <option>Avances y mejoras de negocio</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Cantidad</label>
+            <input type="number" id="act-cantidad" min="1" required>
+          </div>
+          <div class="form-group">
+            <label>Responsable</label>
+            <select id="act-responsable" required>
+              <option value="">Selecciona Asesor...</option>
+            </select>
+          </div>
+          <div class="form-group" style="grid-column: span 2;">
+            <label>Notas / Evidencia</label>
+            <input type="text" id="act-notas" placeholder="Link o descripción" required>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Guardar Actividad</button>
+      </form>
+    </div>
+
+    <!-- ── AGREGATION VIEW ── -->
+    <div class="table-card" style="margin-top: 20px;">
+      <h3 style="padding: 20px; font-weight: 600;">Estadísticas de Actividades (Por Asesor)</h3>
+      <div id="actividadesStats" style="padding: 0 20px 20px;"></div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ── MODAL ───────────────────────────────────────────────── -->
+<div class="modal-overlay hidden" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modalTitle">Nuevo Registro</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ── TOAST ───────────────────────────────────────────────── -->
+<div class="toast hidden" id="toast"></div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODAL: CAMPAÑA DE PROSPECTOS
+══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay hidden" id="campanaModal" onclick="if(event.target===this) closeCampanaModal()">
+  <div class="modal-box" style="max-width:560px; width:95%;">
+    <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div>
+        <h2 style="margin:0;font-size:1.2rem;display:flex;align-items:center;gap:8px;">
+          <span style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;padding:6px 10px;border-radius:8px;font-size:14px;">📢</span>
+          Enviar Campaña
+        </h2>
+        <p id="campanaCount" style="margin:4px 0 0;font-size:13px;color:#6b7280;"></p>
+      </div>
+      <button onclick="closeCampanaModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;">✕</button>
+    </div>
+
+    <!-- Lista de prospectos — se seleccionan aquí mismo -->
+    <div style="background:#f9f7ff;border:1px solid #e9d5ff;border-radius:10px;padding:12px;margin-bottom:16px;max-height:220px;overflow-y:auto;">
+      <p style="margin:0 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;color:#7c3aed;letter-spacing:.5px;">✅ Selecciona los prospectos</p>
+      <ul id="campanaSelectedList" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:2px;font-size:13px;"></ul>
+    </div>
+
+    <form id="campanaForm" onsubmit="submitCampana(event)">
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">Promoción *</label>
+        <select id="campana-promo" required style="width:100%;padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;background:#fff;">
+          <option value="">Selecciona una promoción...</option>
+          <option value="PROMOCION 1">🏷️ PROMOCION 1</option>
+          <option value="PROMOCION 2">🏷️ PROMOCION 2</option>
+        </select>
+      </div>
+      <div style="margin-bottom:20px;">
+        <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">Copy del mensaje *</label>
+        <textarea id="campana-copy" required rows="4" placeholder="Escribe el copy que se enviará a los prospectos seleccionados..."
+          style="width:100%;padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;resize:vertical;box-sizing:border-box;font-family:inherit;"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button type="button" onclick="closeCampanaModal()" style="padding:10px 20px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer;font-size:14px;">Cancelar</button>
+        <button type="submit" style="padding:10px 24px;border:none;border-radius:8px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:600;cursor:pointer;font-size:14px;">
+          📤 Enviar Campaña
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODAL: REPORTE DE STATUS — PROYECTOS
+══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay hidden" id="reporteModal" onclick="if(event.target===this) closeReporteModal()">
+  <div class="modal-box" style="max-width:600px; width:95%;">
+    <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div>
+        <h2 style="margin:0;font-size:1.2rem;display:flex;align-items:center;gap:8px;">
+          <span style="background:linear-gradient(135deg,#0ea5e9,#2563eb);color:#fff;padding:6px 10px;border-radius:8px;font-size:14px;">📊</span>
+          Reporte de Status
+        </h2>
+        <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">Envía un reporte completo del proyecto a n8n</p>
+      </div>
+      <button onclick="closeReporteModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;">✕</button>
+    </div>
+
+    <form id="reporteForm" onsubmit="submitReporte(event)">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+        <div class="modal-field">
+          <label>📁 Proyecto *</label>
+          <select id="reporte-proyecto" required class="modal-select blue"
+            onchange="updateReportePreview(this.value)">
+            <option value="">Selecciona un proyecto...</option>
+          </select>
+        </div>
+        <div class="modal-field">
+          <label>👤 Cliente</label>
+          <select id="reporte-cliente" class="modal-select blue">
+            <option value="">Selecciona un cliente...</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Preview del proyecto -->
+      <div id="reportePreview" style="margin-bottom:14px;"></div>
+
+      <div class="modal-field" style="margin-bottom:20px;">
+        <label>📝 Nota / Observación *</label>
+        <textarea id="reporte-nota" required rows="3"
+          class="modal-textarea"
+          placeholder="Escribe una nota o resumen para el reporte..."></textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button type="button" onclick="closeReporteModal()" class="modal-btn-cancel">Cancelar</button>
+        <button type="submit" class="modal-btn-blue">📤 Enviar Reporte</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Estilos premium para selects y modales de webhook ─── -->
+<style>
+
+  /* ── Preview card del reporte ───────────────────────────── */
+  .reporte-preview-card {
+    background: linear-gradient(135deg,#f0f9ff,#e0f2fe);
+    border: 1px solid #bae6fd;
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 7px;
+    font-size: 13px;
+    box-shadow: 0 2px 8px rgba(14,165,233,.08);
+  }
+  .reporte-preview-row {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid rgba(14,165,233,.1); padding-bottom: 6px;
+  }
+  .reporte-preview-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .reporte-preview-row span:first-child { color: #6b7280; font-size: 12px; }
+  #campanaSelectedList li { display: flex; align-items: center; gap: 8px; }
+
+  /* ══ PILL SELECTS — Tabla de Proyectos ══════════════════════ */
+  .pill-select {
+    appearance: none; -webkit-appearance: none;
+    border: none; border-radius: 20px;
+    padding: 5px 26px 5px 10px;
+    font-size: 11.5px; font-weight: 600; font-family: inherit;
+    cursor: pointer; outline: none;
+    transition: transform .15s, box-shadow .15s;
+    background-repeat: no-repeat;
+    background-position: right 7px center; background-size: 11px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  }
+  .pill-select:hover  { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(0,0,0,.14); }
+  .pill-select:focus  { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.18); }
+
+  .pill-estado-activo  { background-color: #dcfce7; color: #15803d; }
+  .pill-estado-reunion { background-color: #fef3c7; color: #92400e; }
+  .pill-estado-cerrado { background-color: #fee2e2; color: #b91c1c; }
+  .pill-estado-default { background-color: #f1f5f9; color: #475569; }
+
+  .pill-etapa   { background-color: #ede9fe; color: #5b21b6; }
+
+  .pill-prioridad-alta  { background-color: #fee2e2; color: #b91c1c; }
+  .pill-prioridad-media { background-color: #fef3c7; color: #92400e; }
+  .pill-prioridad-baja  { background-color: #dcfce7; color: #15803d; }
+
+  .pill-riesgo-alto  { background-color: #fee2e2; color: #b91c1c; }
+  .pill-riesgo-medio { background-color: #fef3c7; color: #92400e; }
+  .pill-riesgo-bajo  { background-color: #dcfce7; color: #15803d; }
+
+  /* ══ MODAL SELECTS — Glassmorphism + focus glow ═════════════ */
+  .modal-select {
+    appearance: none; -webkit-appearance: none;
+    width: 100%; padding: 11px 38px 11px 14px;
+    border: 1.5px solid #e5e7eb; border-radius: 10px;
+    font-size: 14px; font-family: inherit; color: #111827;
+    background-color: #fff;
+    background-repeat: no-repeat;
+    background-position: right 12px center; background-size: 15px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    cursor: pointer; outline: none;
+    transition: border-color .2s, box-shadow .2s, background-color .2s;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  }
+  .modal-select:hover { border-color: #a5b4fc; background-color: #fafafa; }
+  .modal-select:focus { border-color: #6366f1; background-color: #fff; box-shadow: 0 0 0 3px rgba(99,102,241,.14), 0 2px 8px rgba(99,102,241,.1); }
+  .modal-select.blue:focus  { border-color: #0ea5e9; box-shadow: 0 0 0 3px rgba(14,165,233,.15); }
+  .modal-select.purple:focus { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124,58,237,.15); }
+
+  /* Labels */
+  .modal-field { display: flex; flex-direction: column; gap: 6px; }
+  .modal-field label { font-size: 12px; font-weight: 700; color: #374151; letter-spacing: .3px; }
+
+  /* Textarea */
+  .modal-textarea {
+    width: 100%; padding: 12px 14px;
+    border: 1.5px solid #e5e7eb; border-radius: 10px;
+    font-size: 14px; font-family: inherit; color: #111827;
+    resize: vertical; box-sizing: border-box; outline: none;
+    transition: border-color .2s, box-shadow .2s;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06); line-height: 1.55;
+  }
+  .modal-textarea:hover { border-color: #a5b4fc; }
+  .modal-textarea:focus { border-color: #0ea5e9; box-shadow: 0 0 0 3px rgba(14,165,233,.12); }
+
+  /* Botones */
+  .modal-btn-cancel {
+    padding: 10px 22px; border: 1.5px solid #e5e7eb; border-radius: 10px;
+    background: #fff; color: #6b7280; font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: all .2s; font-family: inherit;
+  }
+  .modal-btn-cancel:hover { border-color: #d1d5db; background: #f9fafb; color: #374151; }
+
+  .modal-btn-blue {
+    padding: 10px 26px; border: none; border-radius: 10px;
+    background: linear-gradient(135deg,#0ea5e9,#2563eb); color: #fff;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: all .2s; font-family: inherit;
+    box-shadow: 0 4px 14px rgba(14,165,233,.35);
+  }
+  .modal-btn-blue:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(14,165,233,.45); }
+  .modal-btn-blue:active { transform: translateY(0); }
+
+  .modal-btn-purple {
+    padding: 10px 26px; border: none; border-radius: 10px;
+    background: linear-gradient(135deg,#7c3aed,#4f46e5); color: #fff;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: all .2s; font-family: inherit;
+    box-shadow: 0 4px 14px rgba(124,58,237,.35);
+  }
+  .modal-btn-purple:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(124,58,237,.45); }
+  .modal-btn-purple:active { transform: translateY(0); }
+</style>
+
+<script src="webhooks.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
+
