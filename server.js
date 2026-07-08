@@ -2,10 +2,27 @@ const express = require('express');
 const cors = require('cors');
 const { google } = require('googleapis');
 const path = require('path');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SPREADSHEET_ID = '1ZCCirL1JXtQ7UIxcxZN9i6y716xY8NgEEQC3QmJu5gI';
+
+// ─── SEGURIDAD ────────────────────────────────────────────────
+// Habilitar Helmet para proteger cabeceras HTTP (con configuración flexible para no romper assets ni iframes)
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false
+}));
+
+// Límite de peticiones para evitar ataques DDoS y fuerza bruta (100 peticiones cada 15 min por IP)
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200, // Aumentado a 200 para permitir el uso normal del ERP
+  message: { error: 'Demasiadas peticiones desde esta IP. Por favor intenta de nuevo en 15 minutos.' }
+});
+app.use(limiter);
 
 app.use(cors());
 app.use(express.json());
