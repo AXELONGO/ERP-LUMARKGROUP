@@ -72,22 +72,26 @@ async function getSheets() {
   if (process.env.GOOGLE_CREDENTIALS) {
     try {
       let rawCreds = process.env.GOOGLE_CREDENTIALS.trim();
+      let isBase64 = false;
       
       // If it looks like base64 (no spaces, no brackets at start)
       if (!rawCreds.startsWith('{') && !rawCreds.startsWith('"') && !rawCreds.startsWith('\\{')) {
         try {
           rawCreds = Buffer.from(rawCreds, 'base64').toString('utf-8');
+          isBase64 = true;
         } catch (err) {
           // Ignore and let it fall through to JSON.parse
         }
       }
 
-      // Cleanup Hostinger artifacts if they pasted raw JSON
-      if (rawCreds.startsWith('"') && rawCreds.endsWith('"')) {
-        rawCreds = rawCreds.slice(1, -1);
+      if (!isBase64) {
+        // Cleanup Hostinger artifacts if they pasted raw JSON
+        if (rawCreds.startsWith('"') && rawCreds.endsWith('"')) {
+          rawCreds = rawCreds.slice(1, -1);
+        }
+        // Remove escaping slashes that Hostinger might add (NEVER replace \n with literal newline)
+        rawCreds = rawCreds.replace(/\\"/g, '"').replace(/\\\\n/g, '\\n').replace(/\\{/g, '{').replace(/\\}/g, '}');
       }
-      // Remove escaping slashes that Hostinger might add
-      rawCreds = rawCreds.replace(/\\"/g, '"').replace(/\\\\n/g, '\\n').replace(/\\n/g, '\n').replace(/\\{/g, '{').replace(/\\}/g, '}');
 
       authOptions.credentials = typeof rawCreds === 'string' ? JSON.parse(rawCreds) : rawCreds;
     } catch (e) {
