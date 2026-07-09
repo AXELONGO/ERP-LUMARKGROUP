@@ -272,7 +272,7 @@
     </div>
     <div class="table-card">
       <table id="tableProspectos">
-        <thead><tr><th>ID</th><th>Nombre</th><th>Correo</th><th>Teléfono</th><th>Medio de Contacto</th><th>Fecha Registro</th><th>Notas</th><th>Asesor</th></tr></thead>
+        <thead><tr><th>ID</th><th>Nombre</th><th>Correo</th><th>Teléfono</th><th>Medio de Contacto</th><th>Fecha Registro</th><th>Notas</th><th>Asesor</th><th>Situación</th><th>Problema</th><th>Implicación</th><th>Necesidad</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -285,7 +285,7 @@
     </div>
     <div class="table-card">
       <table id="tableClientes">
-        <thead><tr><th>ID</th><th>Nombre</th><th>Empresa</th><th>Correo</th><th>Teléfono</th><th>Estado</th><th>Servicio</th><th>Valor Mensual</th><th>Prioridad</th></tr></thead>
+        <thead><tr><th>ID</th><th>Nombre</th><th>Empresa</th><th>Correo</th><th>Teléfono</th><th>Estado</th><th>Servicio</th><th>Valor Mensual</th><th>Prioridad</th><th>Giro</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -301,7 +301,7 @@
     </div>
     <div class="table-card">
       <table id="tableProyectos">
-        <thead><tr><th>ID</th><th>Nombre</th><th>Cliente</th><th>Servicio</th><th>Estado</th><th>Etapa</th><th>% Avance</th><th>Prioridad</th><th>Riesgo</th></tr></thead>
+        <thead><tr><th>ID</th><th>Nombre</th><th>Cliente</th><th>Servicio</th><th>Próxima Reunión</th><th>Estado</th><th>Etapa</th><th>% Avance</th><th>Prioridad</th><th>Riesgo</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -440,7 +440,7 @@
      MODAL: CAMPAÑA DE PROSPECTOS
 ══════════════════════════════════════════════════════════════ -->
 <div class="modal-overlay hidden" id="campanaModal" onclick="if(event.target===this) closeCampanaModal()">
-  <div class="modal-box" style="max-width:560px; width:95%;">
+  <div class="modal" style="max-width:560px; width:95%;">
     <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
       <div>
         <h2 style="margin:0;font-size:1.2rem;display:flex;align-items:center;gap:8px;">
@@ -486,7 +486,7 @@
      MODAL: REPORTE DE STATUS — PROYECTOS
 ══════════════════════════════════════════════════════════════ -->
 <div class="modal-overlay hidden" id="reporteModal" onclick="if(event.target===this) closeReporteModal()">
-  <div class="modal-box" style="max-width:600px; width:95%;">
+  <div class="modal" style="max-width:600px; width:95%;">
     <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
       <div>
         <h2 style="margin:0;font-size:1.2rem;display:flex;align-items:center;gap:8px;">
@@ -499,18 +499,12 @@
     </div>
 
     <form id="reporteForm" onsubmit="submitReporte(event)">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+      <div style="margin-bottom:14px;">
         <div class="modal-field">
           <label>📁 Proyecto *</label>
           <select id="reporte-proyecto" required class="modal-select blue"
             onchange="updateReportePreview(this.value)">
             <option value="">Selecciona un proyecto...</option>
-          </select>
-        </div>
-        <div class="modal-field">
-          <label>👤 Cliente</label>
-          <select id="reporte-cliente" class="modal-select blue">
-            <option value="">Selecciona un cliente...</option>
           </select>
         </div>
       </div>
@@ -569,18 +563,18 @@
   .pill-select:focus  { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.18); }
 
   .pill-estado-activo  { background-color: #dcfce7; color: #15803d; }
-  .pill-estado-reunion { background-color: #fef3c7; color: #92400e; }
+  .pill-estado-reunion { background-color: #fef3c7; color: #000000; }
   .pill-estado-cerrado { background-color: #fee2e2; color: #b91c1c; }
   .pill-estado-default { background-color: #f1f5f9; color: #475569; }
 
   .pill-etapa   { background-color: #ede9fe; color: #5b21b6; }
 
   .pill-prioridad-alta  { background-color: #fee2e2; color: #b91c1c; }
-  .pill-prioridad-media { background-color: #fef3c7; color: #92400e; }
+  .pill-prioridad-media { background-color: #fef3c7; color: #000000; }
   .pill-prioridad-baja  { background-color: #dcfce7; color: #15803d; }
 
   .pill-riesgo-alto  { background-color: #fee2e2; color: #b91c1c; }
-  .pill-riesgo-medio { background-color: #fef3c7; color: #92400e; }
+  .pill-riesgo-medio { background-color: #fef3c7; color: #000000; }
   .pill-riesgo-bajo  { background-color: #dcfce7; color: #15803d; }
 
   /* ══ MODAL SELECTS — Glassmorphism + focus glow ═════════════ */

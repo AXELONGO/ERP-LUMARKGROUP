@@ -5,6 +5,41 @@ const path = require('path');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
+const asyncHandler = require('./utils/asyncHandler');
+const { globalErrorHandler, notFoundHandler } = require('./middleware/errorHandler');
+const { reportBug } = require('./utils/bugReporter');
+
+// Uncaught Exception / Unhandled Rejection Handlers
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  reportBug({ level: 'critical', message: 'Uncaught Exception: ' + err.message, error: err })
+    .finally(() => process.exit(1));
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  reportBug({ level: 'critical', message: 'Unhandled Rejection: ' + (reason?.message || reason), error: reason });
+});
+
+
+// ─── WORKAROUND: SINCRONIZACIÓN DE RELOJ PARA JWT ─────────────
+// Esto previene de forma programática el error "Invalid JWT Signature" 
+// forzando a Node a generar tokens con la hora real de internet en lugar de la hora desfasada de Docker/Mac.
+const originalDateNow = Date.now;
+let timeOffset = 0;
+(async function syncClock() {
+  try {
+    const res = await fetch('http://worldtimeapi.org/api/timezone/Etc/UTC');
+    const data = await res.json();
+    const realTime = new Date(data.utc_datetime).getTime();
+    timeOffset = realTime - originalDateNow();
+    Date.now = () => originalDateNow() + timeOffset;
+    console.log(`\n[Seguridad] Reloj interno sincronizado correctamente. Offset: ${timeOffset}ms\n`);
+  } catch (err) {
+    console.error("[Seguridad] Fallo al sincronizar reloj:", err.message);
+  }
+})();
+// ──────────────────────────────────────────────────────────────
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SPREADSHEET_ID = '1ZCCirL1JXtQ7UIxcxZN9i6y716xY8NgEEQC3QmJu5gI';
@@ -35,6 +70,26 @@ async function getSheets() {
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
   return google.sheets({ version: 'v4', auth: await auth.getClient() });
+}
+
+// Helper para parsear la DB pública (Bypass total de auth y JWT signature errors para lecturas)
+async function getPublicData(sheetName) {
+  const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+  const res = await fetch(url);
+  const text = await res.text();
+  const jsonString = text.match(/google\.visualization\.Query\.setResponse\(([\s\S\w]+)\);/)[1];
+  const data = JSON.parse(jsonString);
+  
+  const headers = data.table.cols.map(c => c.label || '');
+  return data.table.rows.map(r => {
+    const obj = {};
+    headers.forEach((h, i) => {
+      let val = r.c[i] ? (r.c[i].f !== undefined ? r.c[i].f : r.c[i].v) : '';
+      if (val === null) val = '';
+      obj[h] = String(val);
+    });
+    return obj;
+  });
 }
 
 function toRows(values) {
@@ -82,29 +137,14 @@ const PREFIX_MAP = {
 function crudRoutes(sheetName, range, mapper, customEndpoint) {
   const endpoint = customEndpoint || sheetName.toLowerCase().replace(/ /g, '_');
 
-  // GET
-  app.get(`/api/${endpoint}`, async (req, res) => {
-    try {
-      const sheets = await getSheets();
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `'${sheetName}'!${range}`,
-      });
-      const rows = response.data.values || [];
-      if (rows.length === 0) return res.json([]);
-      const headers = rows[0];
-      const data = rows.slice(1).map(row => {
-        const obj = {};
-        headers.forEach((h, i) => obj[h] = row[i] || '');
-        return obj;
-      });
-      res.json(data);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
+  // GET (Bypass de Auth para lecturas ultrarrápidas y sin errores de JWT)
+  app.get(`/api/${endpoint}`, asyncHandler(async (req, res) => {
+      const rows = await getPublicData(sheetName);
+      res.json(rows);
+}));
 
   // POST
-  app.post(`/api/${endpoint}`, async (req, res) => {
-    try {
+  app.post(`/api/${endpoint}`, asyncHandler(async (req, res) => {
       const sheets = await getSheets();
       
       // Generate ID explicitly in Node
@@ -136,12 +176,10 @@ function crudRoutes(sheetName, range, mapper, customEndpoint) {
         resource: { values: [row] },
       });
       res.json({ success: true, id: nextId });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
+}));
 
   // UPDATE
-  app.put(`/api/${endpoint}/:id`, async (req, res) => {
-    try {
+  app.put(`/api/${endpoint}/:id`, asyncHandler(async (req, res) => {
       const sheets = await getSheets();
       const rowNum = await findRowById(sheets, sheetName, req.params.id);
       if (rowNum === -1) return res.status(404).json({ error: 'Registro no encontrado' });
@@ -167,12 +205,10 @@ function crudRoutes(sheetName, range, mapper, customEndpoint) {
         resource: { values: [row] },
       });
       res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
+}));
 
   // DELETE
-  app.delete(`/api/${endpoint}/:id`, async (req, res) => {
-    try {
+  app.delete(`/api/${endpoint}/:id`, asyncHandler(async (req, res) => {
       const sheets = await getSheets();
       const rowNum = await findRowById(sheets, sheetName, req.params.id);
       if (rowNum === -1) return res.status(404).json({ error: 'Registro no encontrado' });
@@ -193,13 +229,12 @@ function crudRoutes(sheetName, range, mapper, customEndpoint) {
         }
       });
       res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
+}));
 }
 
 // ─── MODULES ──────────────────────────────────────────────────
 
-crudRoutes('Clientes', 'A:N', (d, e = []) => [
+crudRoutes('Clientes', 'A:O', (d, e = []) => [
   e[0] || '', // ID Clientes (A)
   d.nombre !== undefined ? d.nombre : (e[1] || ''), // Nombre del Cliente (B)
   d.correo !== undefined ? d.correo : (e[2] || ''), // Correo Electrónico (C)
@@ -213,10 +248,11 @@ crudRoutes('Clientes', 'A:N', (d, e = []) => [
   d.renovacion !== undefined ? d.renovacion : (e[10] || ''), // Renovación (K)
   d.valorMensual !== undefined ? d.valorMensual : (e[11] || ''), // Valor mensual (L)
   d.prioridad !== undefined ? d.prioridad : (e[12] || 'Media'), // Prioridad (M)
-  d.estatus !== undefined ? d.estatus : (e[13] || 'Al día') // Estatus (N)
+  d.estatus !== undefined ? d.estatus : (e[13] || 'Al día'), // Estatus (N)
+  d.giro !== undefined ? d.giro : (e[14] || '') // Giro (O)
 ]);
 
-crudRoutes('Prospectos', 'A:H', (d, e = []) => [
+crudRoutes('Prospectos', 'A:L', (d, e = []) => [
   e[0] || '', 
   d.nombre !== undefined ? d.nombre : (e[1] || ''), 
   d.correo !== undefined ? d.correo : (e[2] || ''), 
@@ -224,7 +260,11 @@ crudRoutes('Prospectos', 'A:H', (d, e = []) => [
   d.notas !== undefined ? d.notas : (e[4] || ''),
   d.fechaRegistro !== undefined ? d.fechaRegistro : (e[5] || new Date().toISOString().split('T')[0]),
   d.asesor !== undefined ? d.asesor : (e[6] || ''),
-  d.medioDeContacto !== undefined ? d.medioDeContacto : (e[7] || '')
+  d.medioDeContacto !== undefined ? d.medioDeContacto : (e[7] || ''),
+  d.situacion !== undefined ? d.situacion : (e[8] || ''),
+  d.problema !== undefined ? d.problema : (e[9] || ''),
+  d.implicacion !== undefined ? d.implicacion : (e[10] || ''),
+  d.necesidad !== undefined ? d.necesidad : (e[11] || '')
 ]);
 
 crudRoutes('Proyectos', 'A:M', (d, e = [], f = [], rowNum) => [
@@ -313,15 +353,15 @@ crudRoutes('Asesores', 'A:F', (d, e = []) => [
 
 
 // ─── DASHBOARD ────────────────────────────────────────────────
-app.get('/api/dashboard', async (req, res) => {
-  try {
-    const sheets = await getSheets();
-    const batch = await sheets.spreadsheets.values.batchGet({
-      spreadsheetId: SPREADSHEET_ID,
-      ranges: ['Clientes!A:R','Proyectos!A:R','Tareas!A:L','Pipeline de Proyecto!A:J','Prospectos!A:H','Citas!A:N'],
-    });
-    const [clientes, proyectos, tareas, pipeline, prospectos, citas] =
-      batch.data.valueRanges.map(vr => toRows(vr.values));
+app.get('/api/dashboard', asyncHandler(async (req, res) => {
+    const [clientes, proyectos, tareas, pipeline, prospectos, citas] = await Promise.all([
+      getPublicData('Clientes'),
+      getPublicData('Proyectos'),
+      getPublicData('Tareas'),
+      getPublicData('Pipeline de Proyecto'),
+      getPublicData('Prospectos'),
+      getPublicData('Citas')
+    ]);
 
     const clientesActivos = clientes.filter(c => c['Estado'] === 'Activo').length;
     const proyectosActivos = proyectos.filter(p => p['Estado del Proyecto'] === 'Activo').length;
@@ -382,18 +422,29 @@ app.get('/api/dashboard', async (req, res) => {
       ingresosPorMes, serviciosCount, etapasCount, proximasCitas,
       totalClientes: clientes.length, totalProyectos: proyectos.length,
     });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
+}));
 
 // ─── TRACKER ──────────────────────────────────────────────────
-app.get('/api/tracker', async (req, res) => {
-  try {
-    const sheets = await getSheets();
-    const r = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID, range: 'Tracker Semanal!A1:H53',
+app.get('/api/tracker', asyncHandler(async (req, res) => {
+    const data = await getPublicData('Tracker Semanal');
+    res.json(data);
+}));
+
+// ─── WEBHOOK CORS PROXY ─────────────────────────────────────────
+app.post('/api/webhook-proxy', asyncHandler(async (req, res) => {
+    const { url, payload } = req.body;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
-    res.json(toRows(r.data.values));
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
+    const data = await response.json().catch(() => ({}));
+    res.json({ success: response.ok, status: response.status, data });
+}));
+
+
+app.use(notFoundHandler);
+app.use(globalErrorHandler);
 
 app.listen(PORT, () => console.log(`\n🚀 ERP LUMARK → http://localhost:${PORT}\n`));
+

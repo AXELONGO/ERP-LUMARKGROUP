@@ -83,3 +83,25 @@ En la raíz del proyecto existen varios scripts creados para ayudarte a gestiona
 ```bash
 node diagnose.js
 ```
+
+---
+
+## 🐳 Solución de Problemas (Troubleshooting)
+
+### Error: `invalid_grant: Invalid JWT Signature`
+Este error se presenta cuando el reloj del contenedor Docker se desincroniza de la hora mundial real, lo que ocasiona que Google rechace la firma criptográfica (JWT) generada por el backend.
+
+**Solución Implementada:**
+Para solucionarlo de raíz y prevenir futuros errores en producción, se mapearon los volúmenes de sincronización de zona horaria directamente del Host (servidor) hacia el contenedor en el archivo `docker-compose.yml`:
+```yaml
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+```
+Esto fuerza al contenedor a siempre utilizar el reloj maestro y preciso de tu computadora o servidor web.
+
+**¿Qué hacer si el error persiste en pruebas locales con Mac?**
+Si aún ves el error en tu computadora, significa que la hora interna de **Docker Desktop** se ha congelado (común al suspender la Mac). Para solucionarlo:
+1. Reinicia Docker Desktop completamente (Click en ícono -> Quit Docker Desktop).
+2. Vuelve a abrirlo.
+3. Ejecuta `docker compose up -d` para volver a iniciar.

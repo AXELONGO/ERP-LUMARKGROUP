@@ -103,7 +103,12 @@ const MAPPING = {
   horas: ['Horas Invertidas'],
   minutos: ['Minutos'],
   comentarios: ['Comentarios'],
-  fecharegistro: ['Fecha de Registro']
+  fecharegistro: ['Fecha de Registro'],
+  situacion: ['Situacion'],
+  problema: ['Problema'],
+  implicacion: ['Implicacion'],
+  necesidad: ['Necesidad'],
+  giro: ['Giro']
 };
 
 const ETAPAS_MAP = {
@@ -353,6 +358,10 @@ async function loadProspectos() {
       <td>${r['Fecha de Registro'] || '—'}</td>
       <td title="${r['Notas'] || ''}">${truncate(r['Notas'], 40)}</td>
       <td>${r['Asesor'] || '—'}</td>
+      <td>${r['Situacion'] || '—'}</td>
+      <td>${r['Problema'] || '—'}</td>
+      <td>${r['Implicacion'] || '—'}</td>
+      <td>${r['Necesidad'] || '—'}</td>
     </tr>`).join('') : emptyState();
 }
 
@@ -373,12 +382,16 @@ async function loadClientes() {
       <td>${r['Servicios contratados'] || '—'}</td>
       <td>${r['Valor mensual'] ? '$' + parseFloat(r['Valor mensual']).toLocaleString() : '—'}</td>
       <td>${priorityBadge(r['Prioridad'])}</td>
+      <td>${r['Giro'] || '—'}</td>
     </tr>`).join('') : emptyState();
 }
 
 // ── PROYECTOS ────────────────────────────────────────────────────
 window.proyectosData = [];
 async function loadProyectos() {
+  if (!window.citasData || window.citasData.length === 0) {
+    try { window.citasData = await fetch(`${API}/api/citas`).then(r => r.json()); } catch(e) {}
+  }
   window.proyectosData = await fetch(`${API}/api/proyectos`).then(r => r.json());
   const data = filterByDate(window.proyectosData);
 
@@ -398,11 +411,37 @@ async function loadProyectos() {
     const prioClase   = { 'Alta': 'pill-prioridad-alta', 'Media': 'pill-prioridad-media', 'Baja': 'pill-prioridad-baja' }[r['Prioridad']] || 'pill-prioridad-media';
     const riesgoClase = { 'Alto': 'pill-riesgo-alto', 'Medio': 'pill-riesgo-medio', 'Bajo': 'pill-riesgo-bajo' }[r['Riesgo']] || 'pill-riesgo-bajo';
 
+    let nextMeeting = r['Próxima reunión'] || '—';
+    if (window.citasData && window.citasData.length > 0) {
+      const projectCitas = window.citasData.filter(c => c['ID Proyecto'] === r['ID Proyectos'] && (c['Fecha de la Cita'] || c['Fecha']));
+      if (projectCitas.length > 0) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        let mappedCitas = projectCitas.map(c => {
+           let d = c['Fecha de la Cita'] || c['Fecha'];
+           let standardDate = d;
+           if (d && d.includes('/')) {
+             const parts = d.split('/');
+             if (parts.length === 3) standardDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+           }
+           return { originalDate: d, standardDate };
+        });
+
+        const upcoming = mappedCitas.filter(c => c.standardDate >= todayStr).sort((a,b) => a.standardDate.localeCompare(b.standardDate));
+        if (upcoming.length > 0) {
+          nextMeeting = upcoming[0].originalDate;
+        } else {
+          mappedCitas.sort((a,b) => b.standardDate.localeCompare(a.standardDate));
+          nextMeeting = mappedCitas[0].originalDate;
+        }
+      }
+    }
+
     return `<tr class="clickable-row" onclick="viewRecord('proyectos', '${r['ID Proyectos'] || ''}')">
       <td><input type="checkbox" class="row-checkbox" value="${r['ID Proyectos'] || ''}" onclick="event.stopPropagation(); toggleSelection(this.value, this.checked)"><span class="badge badge-purple">${r['ID Proyectos'] || '—'}</span></td>
       <td><strong>${r['Nombre del Proyecto'] || '—'}</strong></td>
       <td>${clientName}</td>
       <td>${r['Servicio'] || '—'}</td>
+      <td style="white-space:nowrap; font-weight:600; color:var(--text2);">${nextMeeting}</td>
       <td>
         <select class="pill-select ${estadoClase}" onclick="event.stopPropagation()" onchange="updateProyectoSelect('${r['ID Proyectos']}','estado','Estado del Proyecto',this.value); this.className='pill-select '+({'Activo':'pill-estado-activo','Reunión':'pill-estado-reunion','Cerrado':'pill-estado-cerrado'}[this.value]||'pill-estado-default')">
           <option value="Activo"  ${r['Estado del Proyecto'] === 'Activo'  ? 'selected' : ''}>Activo</option>
@@ -473,6 +512,9 @@ async function updateProyectoSelect(id, payloadKey, memKey, val) {
 window.pipelineData = [];
 async function loadPipeline() {
   if (!window.asesoresData) window.asesoresData = await fetch(`${API}/api/asesores`).then(r => r.json());
+  if (!window.tareasData || window.tareasData.length === 0) {
+    try { window.tareasData = await fetch(`${API}/api/tareas`).then(r => r.json()); } catch(e) {}
+  }
   window.pipelineData = await fetch(`${API}/api/proyectos`).then(r => r.json());
   const data = filterByDate(window.pipelineData);
   const board = document.getElementById('kanban-pipeline');
@@ -505,6 +547,28 @@ async function loadPipeline() {
       if (c) clientName = c['Nombre del Cliente'] || clientName;
     }
 
+    let linkedTasksHtml = '';
+    if (window.tareasData && window.tareasData.length > 0) {
+      const linked = window.tareasData.filter(t => 
+        t['ID Proyecto'] === r['ID Proyectos'] && 
+        (t['Estado'] === 'Pendiente' || t['Estado'] === 'En Proceso')
+      );
+      if (linked.length > 0) {
+        linkedTasksHtml = '<div style="margin-top:12px; padding-top:10px; border-top:1px dashed var(--border);">';
+        linkedTasksHtml += '<div style="font-size:10px; font-weight:700; color:var(--text2); margin-bottom:8px; text-transform:uppercase;">Tareas Activas:</div>';
+        linked.forEach(t => {
+          const badgeClass = t['Estado'] === 'En Proceso' ? 'badge-blue' : 'badge-orange';
+          linkedTasksHtml += `
+            <div style="font-size:11.5px; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+              <span class="badge ${badgeClass}" style="font-size:9.5px; padding:2px 5px;">${t['ID Tarea']}</span>
+              <span style="color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${t['Tarea'] || ''}">${t['Tarea'] || '—'}</span>
+            </div>
+          `;
+        });
+        linkedTasksHtml += '</div>';
+      }
+    }
+
     card.innerHTML = `
       <div class="kanban-card-header" onclick="viewRecord('proyectos', '${r['ID Proyectos']}')">
         <input type="checkbox" class="row-checkbox" value="${r['ID Proyectos']}" onclick="event.stopPropagation(); toggleSelection(this.value, this.checked)">
@@ -516,6 +580,7 @@ async function loadPipeline() {
         <p><strong>Cliente:</strong> ${clientName}</p>
         <p><strong>Servicio:</strong> ${r['Servicio'] || '—'}</p>
         <p title="${r['Notas'] || ''}">${truncate(r['Notas'], 30)}</p>
+        ${linkedTasksHtml}
       </div>
       <div class="kanban-card-footer">
         <span class="kanban-card-resp">Avance: ${r['% Avance'] || '0%'}</span>
@@ -878,6 +943,10 @@ function formProspecto() {
         </select>
       </div>
       <div class="form-group full"><label>Notas</label><input name="notas"></div>
+      <div class="form-group full-width"><label>Situación</label><textarea name="situacion"></textarea></div>
+      <div class="form-group full-width"><label>Problema</label><textarea name="problema"></textarea></div>
+      <div class="form-group full-width"><label>Implicación</label><textarea name="implicacion"></textarea></div>
+      <div class="form-group full-width"><label>Necesidad</label><textarea name="necesidad"></textarea></div>
     </div>
     <button type="submit" class="btn btn-primary btn-block">Guardar Prospecto</button>
   </form>`;
@@ -910,6 +979,7 @@ function formCliente() {
         <select name="prioridad"><option>Alta</option><option>Media</option><option>Baja</option></select></div>
       <div class="form-group"><label>Fecha Renovación</label><input name="renovacion" type="date"></div>
       <div class="form-group"><label>Dirección</label><input name="direccion"></div>
+      <div class="form-group"><label>Giro</label><input name="giro"></div>
       <div class="form-group full"><label>Notas sobre el Cliente</label><input name="notas"></div>
     </div>
     <button type="submit" class="btn btn-primary btn-block">Guardar Cliente</button>
@@ -1292,7 +1362,7 @@ function viewRecord(endpoint, id) {
     if (isIdCol || !isEditable) {
       html += `
         <div class="detail-item" style="background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 8px;">
-          <div class="detail-label" style="font-weight: 900; font-size: 13px; margin-bottom: 4px; background: linear-gradient(135deg, #fb923c, #ea580c); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">${k}</div>
+          <div class="detail-label" style="font-weight: 900; font-size: 13px; margin-bottom: 4px; color: #000000;">${k}</div>
           <div class="detail-value ${isMuted ? 'text-muted' : ''}" style="padding: 4px; color: #1e293b; font-weight: 500;">
             ${displayVal}
           </div>
@@ -1301,7 +1371,7 @@ function viewRecord(endpoint, id) {
     } else {
       html += `
         <div class="detail-item" style="background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 8px;">
-          <div class="detail-label" style="font-weight: 900; font-size: 13px; margin-bottom: 4px; background: linear-gradient(135deg, #fb923c, #ea580c); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">${k}</div>
+          <div class="detail-label" style="font-weight: 900; font-size: 13px; margin-bottom: 4px; color: #000000;">${k}</div>
           <div class="detail-value ${isMuted ? 'text-muted' : ''} editable-field" 
                style="cursor: pointer; padding: 4px; border-radius: 4px; transition: background 0.2s;"
                onmouseover="this.style.background='#f0f4f8'" 

@@ -5,20 +5,20 @@
 // ═══════════════════════════════════════════════════════════════════
 
 const WEBHOOK_ENDPOINTS = {
-  citas:      'https://demian405-n8n-free.hf.space/webhook/CITAS',
-  tareas:     'https://demian405-n8n-free.hf.space/webhook/TAREAS',
-  proyectos:  'https://demian405-n8n-free.hf.space/webhook/PROYECTOS',
+  citas: 'https://demian405-n8n-free.hf.space/webhook/5649c541-fd91-4f8b-ba90-5da4cd767b96',
+  tareas: 'https://demian405-n8n-free.hf.space/webhook/TAREAS',
+  proyectos: 'https://demian405-n8n-free.hf.space/webhook/PROYECTOS',
   prospectos: 'https://demian405-n8n-free.hf.space/webhook/PROSPECTOS',
 };
 
 // Mapeo de endpoint interno → nombre del módulo semántico
 const MODULE_NAMES = {
-  citas:              'citas',
-  tareas:             'tareas',
-  proyectos:          'proyectos',
-  pipeline:           'proyectos',
+  citas: 'citas',
+  tareas: 'tareas',
+  proyectos: 'proyectos',
+  pipeline: 'proyectos',
   pipeline_de_proyecto: 'proyectos',
-  prospectos:         'prospectos',
+  prospectos: 'prospectos',
 };
 
 // Convención de nombres de eventos
@@ -39,7 +39,7 @@ const RETRY_DELAY_MS = 2000;
  */
 function generateEventId() {
   const rand = Math.random().toString(36).substring(2, 10);
-  const ts   = Date.now().toString(36);
+  const ts = Date.now().toString(36);
   return `evt_${ts}${rand}`;
 }
 
@@ -56,16 +56,16 @@ function buildPayload(module, triggerSource, recordId, data, formData = null, bu
   const eventType = EVENT_TYPES[triggerSource]?.(module) || `${module}.${triggerSource}`;
 
   return {
-    event_id:        generateEventId(),
-    schema_version:  '1.0',
-    module:          module,
-    event_type:      eventType,
-    trigger_source:  triggerSource,
-    record_id:       recordId || null,
+    event_id: generateEventId(),
+    schema_version: '1.0',
+    module: module,
+    event_type: eventType,
+    trigger_source: triggerSource,
+    record_id: recordId || null,
     button_action_id: buttonActionId || null,
-    sent_at:         new Date().toISOString(),
-    data:            data || {},
-    form_data:       formData || null,
+    sent_at: new Date().toISOString(),
+    data: data || {},
+    form_data: formData || null,
   };
 }
 
@@ -83,10 +83,10 @@ async function sendWebhook(module, payload, attempt = 1) {
   }
 
   try {
-    const res = await fetch(url, {
-      method:  'POST',
+    const res = await fetch('/api/webhook-proxy', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload),
+      body: JSON.stringify({ url, payload }),
     });
 
     if (res.ok) {
@@ -117,8 +117,8 @@ async function sendWebhook(module, payload, attempt = 1) {
  * @param {object|null} buttonInfo   - { formData, buttonActionId } para acciones de botón
  */
 function dispatchWebhook(endpointOrModule, triggerSource, recordId, recordData, buttonInfo = null) {
-  const module  = MODULE_NAMES[endpointOrModule] || endpointOrModule;
-  const url     = WEBHOOK_ENDPOINTS[module];
+  const module = MODULE_NAMES[endpointOrModule] || endpointOrModule;
+  const url = WEBHOOK_ENDPOINTS[module];
   if (!url) return; // Silently skip non-webhook modules (clientes, actividades, etc.)
 
   const payload = buildPayload(
@@ -126,7 +126,7 @@ function dispatchWebhook(endpointOrModule, triggerSource, recordId, recordData, 
     triggerSource,
     recordId,
     recordData,
-    buttonInfo?.formData   || null,
+    buttonInfo?.formData || null,
     buttonInfo?.buttonActionId || null
   );
 
@@ -184,35 +184,35 @@ function closeCampanaModal() {
 
 async function submitCampana(e) {
   e.preventDefault();
-  const copyText  = document.getElementById('campana-copy').value.trim();
+  const copyText = document.getElementById('campana-copy').value.trim();
   const promoType = document.getElementById('campana-promo').value;
 
   // Leer prospectos marcados dentro del modal
-  const checkedIds   = Array.from(document.querySelectorAll('.campana-check:checked')).map(cb => cb.value);
+  const checkedIds = Array.from(document.querySelectorAll('.campana-check:checked')).map(cb => cb.value);
   const selectedData = (window.prospectosData || []).filter(p => checkedIds.includes(p['ID Prospectos']));
 
-  if (!copyText)              { showToast('⚠️ Escribe el copy antes de enviar', true); return; }
-  if (!promoType)             { showToast('⚠️ Selecciona una promoción', true); return; }
-  if (!selectedData.length)  { showToast('⚠️ Selecciona al menos un prospecto', true); return; }
+  if (!copyText) { showToast('⚠️ Escribe el copy antes de enviar', true); return; }
+  if (!promoType) { showToast('⚠️ Selecciona una promoción', true); return; }
+  if (!selectedData.length) { showToast('⚠️ Selecciona al menos un prospecto', true); return; }
 
   const btn = e.target.querySelector('button[type="submit"]');
   btn.disabled = true;
   btn.textContent = 'Enviando...';
 
   const recordData = {
-    selected_count:     selectedData.length,
+    selected_count: selectedData.length,
     selected_prospects: selectedData.map(p => ({
-      id:       p['ID Prospectos'],
-      nombre:   p['Nombre del Contacto'],
+      id: p['ID Prospectos'],
+      nombre: p['Nombre del Contacto'],
       telefono: p['Teléfono'],
-      correo:   p['Correo Electrónico'],
-      asesor:   p['Asesor'],
-      notas:    p['Notas'],
+      correo: p['Correo Electrónico'],
+      asesor: p['Asesor'],
+      notas: p['Notas'],
     })),
   };
 
   const formData = {
-    copy_text:      copyText,
+    copy_text: copyText,
     promotion_type: promoType,
   };
 
@@ -245,20 +245,12 @@ async function submitCampana(e) {
 function openReporteModal(projectId = null) {
   // Poblar select de proyectos
   const proyectos = window.proyectosData || [];
-  const select    = document.getElementById('reporte-proyecto');
+  const select = document.getElementById('reporte-proyecto');
   select.innerHTML = '<option value="">Selecciona un proyecto...</option>' +
     proyectos.map(p =>
       `<option value="${p['ID Proyectos']}" ${p['ID Proyectos'] === projectId ? 'selected' : ''}>
         ${p['ID Proyectos']} — ${p['Nombre del Proyecto'] || '—'}
       </option>`
-    ).join('');
-
-  // Poblar select de clientes
-  const clientes = window.clientesData || [];
-  const cliSelect = document.getElementById('reporte-cliente');
-  cliSelect.innerHTML = '<option value="">Selecciona un cliente...</option>' +
-    clientes.map(c =>
-      `<option value="${c['ID Clientes']}">${c['Nombre del Cliente'] || c['ID Clientes']}</option>`
     ).join('');
 
   // Si hay proyecto preseleccionado, auto-fill el preview
@@ -279,17 +271,13 @@ function updateReportePreview(projectId) {
 
   const avance = p['% Avance'] || '0%';
   const estado = p['Estado del Proyecto'] || '—';
-  const etapa  = typeof formatEtapa !== 'undefined' ? formatEtapa(p['Etapa actual']) : (window.formatEtapa ? window.formatEtapa(p['Etapa actual']) : p['Etapa actual']);
+  const etapa = typeof formatEtapa !== 'undefined' ? formatEtapa(p['Etapa actual']) : (window.formatEtapa ? window.formatEtapa(p['Etapa actual']) : p['Etapa actual']);
 
   document.getElementById('reportePreview').innerHTML = `
     <div class="reporte-preview-card">
-      <div class="reporte-preview-row"><span>🆔 ID</span><span class="badge badge-purple">${p['ID Proyectos']}</span></div>
       <div class="reporte-preview-row"><span>📁 Proyecto</span><strong>${p['Nombre del Proyecto'] || '—'}</strong></div>
-      <div class="reporte-preview-row"><span>👤 Cliente</span><span>${p['Cliente Relacionado'] || '—'}</span></div>
-      <div class="reporte-preview-row"><span>📊 Estado</span><span>${estado}</span></div>
       <div class="reporte-preview-row"><span>📈 Avance</span><strong style="color:#10b981">${avance}</strong></div>
       <div class="reporte-preview-row"><span>🔁 Etapa</span><span>${etapa || '—'}</span></div>
-      <div class="reporte-preview-row"><span>🚨 Riesgo</span><span>${p['Riesgo'] || '—'}</span></div>
       <div class="reporte-preview-row"><span>📅 Próx. Reunión</span><span>${p['Próxima reunión'] || '—'}</span></div>
     </div>`;
 }
@@ -297,10 +285,10 @@ function updateReportePreview(projectId) {
 async function submitReporte(e) {
   e.preventDefault();
   const projectId = document.getElementById('reporte-proyecto').value;
-  const note      = document.getElementById('reporte-nota').value.trim();
+  const note = document.getElementById('reporte-nota').value.trim();
 
   if (!projectId) { showToast('⚠️ Selecciona un proyecto', true); return; }
-  if (!note)      { showToast('⚠️ Escribe una nota antes de enviar', true); return; }
+  if (!note) { showToast('⚠️ Escribe una nota antes de enviar', true); return; }
 
   const p = (window.proyectosData || []).find(x => x['ID Proyectos'] === projectId);
 
@@ -308,21 +296,21 @@ async function submitReporte(e) {
   btn.disabled = true;
   btn.textContent = 'Enviando...';
 
-  const avancePct    = p?.['% Avance'] || '0%';
+  const avancePct = p?.['% Avance'] || '0%';
   const estadoActual = p?.['Estado del Proyecto'] || '—';
-  const servicio     = p?.['Servicio'] || '—';
-  const etapa        = p?.['Etapa actual'] || '—';
-  const etapaLabel   = window.ETAPAS_MAP?.[String(etapa)] || etapa;
+  const servicio = p?.['Servicio'] || '—';
+  const etapa = p?.['Etapa actual'] || '—';
+  const etapaLabel = window.ETAPAS_MAP?.[String(etapa)] || etapa;
 
   // ── Payload enfocado al cliente ──────────────────────────────────
   // Solo se envía lo que es relevante para el cliente:
   // status, tipo de servicio, % avance y notas del ejecutivo
   const recordData = {
-    project_id:          projectId,
-    project_name:        p?.['Nombre del Proyecto'] || '—',
-    current_status:      estadoActual,
-    service:             servicio,
-    stage:               etapaLabel,
+    project_id: projectId,
+    project_name: p?.['Nombre del Proyecto'] || '—',
+    current_status: estadoActual,
+    service: servicio,
+    stage: etapaLabel,
     progress_percentage: avancePct,
   };
 
@@ -354,14 +342,14 @@ async function submitReporte(e) {
 }
 
 // ── EXPORT GLOBAL ─────────────────────────────────────────────────
-window.dispatchWebhook     = dispatchWebhook;
-window.openCampanaModal    = openCampanaModal;
-window.closeCampanaModal   = closeCampanaModal;
-window.submitCampana       = submitCampana;
-window.openReporteModal    = openReporteModal;
-window.closeReporteModal   = closeReporteModal;
+window.dispatchWebhook = dispatchWebhook;
+window.openCampanaModal = openCampanaModal;
+window.closeCampanaModal = closeCampanaModal;
+window.submitCampana = submitCampana;
+window.openReporteModal = openReporteModal;
+window.closeReporteModal = closeReporteModal;
 window.updateReportePreview = updateReportePreview;
-window.submitReporte       = submitReporte;
-window.webhookRetryQueue   = webhookRetryQueue;
+window.submitReporte = submitReporte;
+window.webhookRetryQueue = webhookRetryQueue;
 
 console.log('[WEBHOOK ENGINE] Lumark ERP Webhook Engine v1.0 — Listo ✅');
