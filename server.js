@@ -72,9 +72,23 @@ async function getSheets() {
   if (process.env.GOOGLE_CREDENTIALS) {
     try {
       let rawCreds = process.env.GOOGLE_CREDENTIALS.trim();
-      if (rawCreds.startsWith('"') && rawCreds.endsWith('"')) {
-        rawCreds = rawCreds.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\n/g, '\\n').replace(/\\n/g, '\n');
+      
+      // If it looks like base64 (no spaces, no brackets at start)
+      if (!rawCreds.startsWith('{') && !rawCreds.startsWith('"') && !rawCreds.startsWith('\\{')) {
+        try {
+          rawCreds = Buffer.from(rawCreds, 'base64').toString('utf-8');
+        } catch (err) {
+          // Ignore and let it fall through to JSON.parse
+        }
       }
+
+      // Cleanup Hostinger artifacts if they pasted raw JSON
+      if (rawCreds.startsWith('"') && rawCreds.endsWith('"')) {
+        rawCreds = rawCreds.slice(1, -1);
+      }
+      // Remove escaping slashes that Hostinger might add
+      rawCreds = rawCreds.replace(/\\"/g, '"').replace(/\\\\n/g, '\\n').replace(/\\n/g, '\n').replace(/\\{/g, '{').replace(/\\}/g, '}');
+
       authOptions.credentials = typeof rawCreds === 'string' ? JSON.parse(rawCreds) : rawCreds;
     } catch (e) {
       throw new Error(`[AUTH] Error crítico parseando la variable GOOGLE_CREDENTIALS: ${e.message}. Verifica que el JSON esté bien formado en tu Hosting.`);
