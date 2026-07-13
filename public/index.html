@@ -17,10 +17,37 @@
   <script src="https://assets.calendly.com/assets/external/widget.js" type="text/javascript" async></script>
   <!-- Phosphor Icons -->
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=17">
 </head>
 <body>
 
+  <!-- ── LOGIN SCREEN ────────────────────────────────────────── -->
+  <div id="login-screen" class="hidden" style="flex: 1; width: 100%; display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#f3f4f6;text-align:center;padding:20px;">
+    <div style="background:#fff;padding:40px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);max-width:400px;width:100%;">
+      <img id="login-logo" src="" alt="Logo" style="max-height:80px;margin-bottom:20px;">
+      <h2 id="login-title" style="margin-bottom:30px;color:#111827;font-weight:600;">Bienvenido</h2>
+      
+      <!-- FORMULARIO TRADICIONAL -->
+      <form id="login-form" style="display:flex; flex-direction:column; gap:15px; margin-bottom: 25px;" onsubmit="event.preventDefault(); window.loginWithEmail();">
+        <input type="email" id="login-email" placeholder="Correo Electrónico" required style="padding:12px; border:1.5px solid #e5e7eb; border-radius:8px; font-size:14px; outline:none; transition:border-color 0.2s;" onfocus="this.style.borderColor='#0ea5e9'" onblur="this.style.borderColor='#e5e7eb'">
+        <input type="password" id="login-password" placeholder="Contraseña" required style="padding:12px; border:1.5px solid #e5e7eb; border-radius:8px; font-size:14px; outline:none; transition:border-color 0.2s;" onfocus="this.style.borderColor='#0ea5e9'" onblur="this.style.borderColor='#e5e7eb'">
+        <button type="submit" class="modal-btn-blue" style="width:100%; margin-top:5px; padding:12px; font-size:15px;">Ingresar al Sistema</button>
+      </form>
+
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom: 25px; color:#9ca3af; font-size:12px; text-transform:uppercase;">
+        <div style="flex:1; height:1px; background:#e5e7eb;"></div>
+        O continuar con
+        <div style="flex:1; height:1px; background:#e5e7eb;"></div>
+      </div>
+
+      <!-- GOOGLE SIGN IN -->
+      <div id="google-signin-button" style="display:flex;justify-content:center;min-height:40px;">
+        <span style="color:#6b7280; font-size:13px; font-style:italic;">Cargando botón de Google...</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="app-wrapper" class="hidden">
   <div class="modal-overlay hidden" id="dateFilterModal" onclick="if(event.target===this) closeDateFilter()">
     <div class="modal" style="max-width: 400px; width: 100%;">
       <div class="modal-header">
@@ -83,6 +110,18 @@
     <a href="#" class="nav-item" data-section="actividades" id="nav-actividades">
       <span class="nav-icon"><i class="ph ph-lightning"></i></span><span>Registrar Actividad</span>
     </a>
+    <div style="flex: 1;"></div>
+    <!-- USER INFO COMPONENT -->
+    <div style="padding: 15px; margin: 10px; border-radius: 8px; background: rgba(0,0,0,0.2); display: flex; align-items: center; gap: 10px; margin-top: auto;">
+      <img id="user-avatar" src="https://ui-avatars.com/api/?name=User" style="width:40px;height:40px;border-radius:50%;">
+      <div style="flex:1; overflow:hidden;">
+        <div id="user-name-display" style="font-weight:600;font-size:14px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Usuario</div>
+        <div id="user-role-display" style="font-size:12px;color:#9ca3af;">Rol</div>
+      </div>
+      <button onclick="window.logout()" style="background:none;border:none;color:#ef4444;cursor:pointer;" title="Cerrar sesión">
+        <i class="ph ph-sign-out" style="font-size:20px;"></i>
+      </button>
+    </div>
   </nav>
 
   <div class="sidebar-footer">
@@ -117,27 +156,7 @@
   <!-- ── DASHBOARD ─────────────────────────────────────────── -->
   <section class="section" id="section-dashboard">
     <style>
-      .welcome-banner {
-        background: var(--blue-light);
-        border-radius: var(--radius);
-        padding: 24px;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        margin-bottom: 24px;
-        position: relative;
-        overflow: hidden;
-      }
-      .welcome-banner::after {
-        content: "";
-        position: absolute;
-        top: 0; right: 0; bottom: 0; width: 40%;
-        background: linear-gradient(270deg, rgba(124,58,237,0.1) 0%, transparent 100%);
-        pointer-events: none;
-      }
-      .welcome-title { font-size: 24px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px;}
-      .welcome-info { display: flex; gap: 20px; align-items: center; background: var(--surface); padding: 16px; border-radius: var(--radius-sm); box-shadow: var(--shadow); z-index: 1; position: relative;}
-      .welcome-info .logo-box { background: var(--blue); color: white; width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; }
+
       
       .dashboard-section-title {
         font-size: 1.25rem;
@@ -275,7 +294,7 @@
     </div>
     <div class="table-card">
       <table id="tableProspectos">
-        <thead><tr><th>ID</th><th>Nombre</th><th>Correo</th><th>Teléfono</th><th>Medio de Contacto</th><th>Fecha Registro</th><th>Notas</th><th>Asesor</th><th>Situación</th><th>Problema</th><th>Implicación</th><th>Necesidad</th></tr></thead>
+        <thead><tr><th>ID</th><th>Nombre del Contacto</th><th>Nombre del Negocio</th><th>Correo</th><th>Teléfono</th><th>Medio de Contacto</th><th>Fecha Registro</th><th>Notas</th><th>Asesor</th><th>Situación</th><th>Problema</th><th>Implicación</th><th>Necesidad</th><th>Giro</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -312,37 +331,78 @@
 
   <!-- ── PIPELINE ───────────────────────────────────────────── -->
   <section class="section hidden" id="section-pipeline">
-    <div class="table-toolbar">
-      <input type="text" class="search-input" placeholder="Buscar en pipeline..." oninput="filterKanban('kanban-pipeline', this.value)">
+    <div class="pipeline-tabs-wrapper">
+      <button class="pipeline-tab-btn active" id="tab-pipeline-proyectos" onclick="switchPipeline('proyectos')">
+        <i class="fas fa-project-diagram"></i> Pipeline de Proyectos
+      </button>
+      <button class="pipeline-tab-btn" id="tab-pipeline-prospectos" onclick="switchPipeline('prospectos')">
+        <i class="fas fa-users"></i> Pipeline de Prospectos
+      </button>
     </div>
-    <div class="kanban-board" id="kanban-pipeline">
-      <div class="kanban-col" data-status="1">
-        <h3 class="kanban-col-title">1 → Activación <span class="kanban-count">0</span></h3>
-        <div class="kanban-cards"></div>
+
+    <!-- PIPELINE PROYECTOS -->
+    <div id="pipeline-proyectos-container">
+      <div class="table-toolbar">
+        <input type="text" class="search-input" placeholder="Buscar en pipeline proyectos..." oninput="filterKanban('kanban-pipeline', this.value)">
       </div>
-      <div class="kanban-col" data-status="2">
-        <h3 class="kanban-col-title">2 → Diagnóstico <span class="kanban-count">0</span></h3>
-        <div class="kanban-cards"></div>
+      <div class="kanban-board" id="kanban-pipeline">
+        <div class="kanban-col" data-status="1">
+          <h3 class="kanban-col-title">1 → Activación <span class="kanban-count">0</span></h3>
+          <div class="kanban-cards"></div>
+        </div>
+        <div class="kanban-col" data-status="2">
+          <h3 class="kanban-col-title">2 → Diagnóstico <span class="kanban-count">0</span></h3>
+          <div class="kanban-cards"></div>
+        </div>
+        <div class="kanban-col" data-status="3">
+          <h3 class="kanban-col-title">3 → Calendario de Cont. <span class="kanban-count">0</span></h3>
+          <div class="kanban-cards"></div>
+        </div>
+        <div class="kanban-col" data-status="4">
+          <h3 class="kanban-col-title">4 → Creación Cont. <span class="kanban-count">0</span></h3>
+          <div class="kanban-cards"></div>
+        </div>
+        <div class="kanban-col" data-status="5">
+          <h3 class="kanban-col-title">5 → Campaña <span class="kanban-count">0</span></h3>
+          <div class="kanban-cards"></div>
+        </div>
+        <div class="kanban-col" data-status="6">
+          <h3 class="kanban-col-title">6 → Reporte de Res. <span class="kanban-count">0</span></h3>
+          <div class="kanban-cards"></div>
+        </div>
+        <div class="kanban-col" data-status="7">
+          <h3 class="kanban-col-title">7 → Renovación <span class="kanban-count">0</span></h3>
+          <div class="kanban-cards"></div>
+        </div>
       </div>
-      <div class="kanban-col" data-status="3">
-        <h3 class="kanban-col-title">3 → Calendario de Cont. <span class="kanban-count">0</span></h3>
-        <div class="kanban-cards"></div>
+    </div>
+
+    <!-- PIPELINE PROSPECTOS -->
+    <div id="pipeline-prospectos-container" style="display: none;">
+      <div class="table-toolbar">
+        <input type="text" class="search-input" placeholder="Buscar en pipeline prospectos..." oninput="filterKanban('kanban-pipeline-prospectos', this.value)">
       </div>
-      <div class="kanban-col" data-status="4">
-        <h3 class="kanban-col-title">4 → Creación Cont. <span class="kanban-count">0</span></h3>
-        <div class="kanban-cards"></div>
-      </div>
-      <div class="kanban-col" data-status="5">
-        <h3 class="kanban-col-title">5 → Campaña <span class="kanban-count">0</span></h3>
-        <div class="kanban-cards"></div>
-      </div>
-      <div class="kanban-col" data-status="6">
-        <h3 class="kanban-col-title">6 → Reporte de Res. <span class="kanban-count">0</span></h3>
-        <div class="kanban-cards"></div>
-      </div>
-      <div class="kanban-col" data-status="7">
-        <h3 class="kanban-col-title">7 → Renovación <span class="kanban-count">0</span></h3>
-        <div class="kanban-cards"></div>
+      <div class="kanban-board" id="kanban-pipeline-prospectos">
+        <div class="kanban-col" data-status="Nuevo">
+          <h3 class="kanban-col-title">Nuevo <span class="kanban-count">0</span></h3>
+          <div class="kanban-cards"></div>
+        </div>
+        <div class="kanban-col" data-status="En proceso">
+          <h3 class="kanban-col-title">En proceso <span class="kanban-count">0</span></h3>
+          <div class="kanban-cards"></div>
+        </div>
+        <div class="kanban-col" data-status="En espera">
+          <h3 class="kanban-col-title">En espera <span class="kanban-count">0</span></h3>
+          <div class="kanban-cards"></div>
+        </div>
+        <div class="kanban-col" data-status="Ganando">
+          <h3 class="kanban-col-title">Ganando <span class="kanban-count">0</span></h3>
+          <div class="kanban-cards"></div>
+        </div>
+        <div class="kanban-col" data-status="Cancelado">
+          <h3 class="kanban-col-title">Cancelado <span class="kanban-count">0</span></h3>
+          <div class="kanban-cards"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -649,8 +709,12 @@
   .modal-btn-purple:active { transform: translateY(0); }
 </style>
 
-<script src="webhooks.js"></script>
+<script src="js/api.js?v=17"></script>
+<script src="webhooks.js?v=17"></script>
 <script src="https://assets.calendly.com/assets/external/widget.js" type="text/javascript" async></script>
-<script src="app.js?v=7"></script>
+<script src="https://accounts.google.com/gsi/client"></script>
+<script type="module" src="js/main.js?v=17"></script>
+<script src="app.js?v=17"></script>
+</div>
 </body>
 </html>

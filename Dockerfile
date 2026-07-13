@@ -1,23 +1,22 @@
-FROM node:20-alpine
-
-# Establecer directorio de trabajo
+# Etapa Base
+FROM node:20-alpine AS base
 WORKDIR /usr/src/app
-
-# Copiar configuración de dependencias
 COPY package*.json ./
 
-# Instalar solo las dependencias de producción
-RUN npm ci --only=production
-
-# Copiar el resto del código (incluyendo credenciales si no están en .dockerignore)
+# Etapa Desarrollo
+FROM base AS dev
+RUN npm install
 COPY . .
-
-# Hacer ejecutable el script de sincronización de tiempo
 RUN chmod +x /usr/src/app/entrypoint.sh
-
-# Exponer el puerto
 EXPOSE 3000
+ENTRYPOINT ["/usr/src/app/entrypoint.sh"]
+CMD ["node", "--watch", "server.js"]
 
-# Usar el script de entrada que sincroniza el tiempo y luego levanta el servidor
+# Etapa Producción
+FROM base AS production
+RUN npm ci --only=production
+COPY . .
+RUN chmod +x /usr/src/app/entrypoint.sh
+EXPOSE 3000
 ENTRYPOINT ["/usr/src/app/entrypoint.sh"]
 CMD ["node", "server.js"]
