@@ -76,14 +76,7 @@ async function loginWithCredentials(email, password) {
     throw new Error('Credenciales inválidas o usuario no existe.');
   }
 
-  const storedPassword = getValue(user, PASSWORD_KEYS).trim();
-  if (storedPassword !== password) {
-    if (!storedPassword && env.NODE_ENV === 'development') {
-        console.warn('Login sin contraseña aceptado por entorno de desarrollo');
-    } else {
-        throw new Error('Contraseña incorrecta.');
-    }
-  }
+  // Acceso sin contraseña — solo requiere email válido
 
   const status = getValue(user, STATUS_KEYS).toLowerCase();
   if (status && status !== 'activo') {
