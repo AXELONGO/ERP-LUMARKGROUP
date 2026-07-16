@@ -64,30 +64,18 @@ async function loginWithGoogle(token) {
 }
 
 async function loginWithCredentials(email, password) {
-  const asesores = await sheetsService.getPublicData('Asesores');
-  const sampleHeaders = Object.keys(asesores[0] || {});
-  console.log("Asesores headers detectados:", sampleHeaders);
+  const VALID_EMAIL = 'axeldemian6969@gmail.com';
+  const VALID_PASSWORD = '1234';
 
-  const user = asesores.find(u => getValue(u, EMAIL_KEYS).trim().toLowerCase() === email.trim().toLowerCase());
-  
-  if (!user) {
-    console.log("Usuario no encontrado. Headers disponibles:", sampleHeaders);
-    console.log("Primer registro:", JSON.stringify(asesores[0] || {}));
-    throw new Error('Credenciales inválidas o usuario no existe.');
-  }
-
-  // Acceso sin contraseña — solo requiere email válido
-
-  const status = getValue(user, STATUS_KEYS).toLowerCase();
-  if (status && status !== 'activo') {
-    throw new Error('Tu cuenta está inactiva.');
+  if (email.trim().toLowerCase() !== VALID_EMAIL || password !== VALID_PASSWORD) {
+    throw new Error('Credenciales inválidas.');
   }
 
   const jwtPayload = {
-    id: getValue(user, ID_KEYS) || email,
+    id: '1',
     email: email,
-    name: getValue(user, NAME_KEYS),
-    role: getValue(user, ROLE_KEYS) || 'Asesor'
+    name: 'Axel Demian',
+    role: 'Admin'
   };
 
   const authToken = jwt.sign(jwtPayload, env.JWT_SECRET, { expiresIn: '7d' });
