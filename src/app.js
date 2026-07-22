@@ -21,6 +21,9 @@ const { authMiddleware } = require('./middleware/auth');
 
 const app = express();
 
+// Trust proxy for rate limiter behind Hostinger reverse proxy
+app.set('trust proxy', 1);
+
 // ─── SEGURIDAD Y PERFORMANCE ──────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: false,

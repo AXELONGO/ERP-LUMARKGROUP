@@ -8,3 +8,4 @@ credentials.json
 *.log
 server.log
 scripts/
+.env.docker

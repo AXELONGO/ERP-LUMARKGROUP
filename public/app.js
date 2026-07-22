@@ -1,22 +1,17 @@
 // ── GLOBALS ───────────────────────────────────────────────────────
-// Note: API, escapeHtml, debounce, showToast, etc. come from js/utils/helpers.js
-// This file keeps backward compatibility with the monolithic version.
-var currentSection = 'dashboard';
-var escapeHtml2 = window.escapeHtml || escapeHtml;
+const API = '';
+let currentSection = 'dashboard';
 
-// Chart instance registry to prevent memory leaks
 function renderBarChart(canvasId, dataObj, labelStr, colorHex) {
     const ctx = document.getElementById(canvasId);
     if (!ctx) return;
-    if (chartInstances[canvasId]) {
-      chartInstances[canvasId].destroy();
-      delete chartInstances[canvasId];
-    }
+    const existingChart = Chart.getChart(ctx);
+    if (existingChart) existingChart.destroy();
 
     const labels = Object.keys(dataObj);
     const data = Object.values(dataObj);
 
-    chartInstances[canvasId] = new Chart(ctx, {
+    new Chart(ctx, {
       type: 'bar',
       data: {
         labels: labels,
@@ -44,15 +39,13 @@ function renderBarChart(canvasId, dataObj, labelStr, colorHex) {
 function renderDoughnutChart(canvasId, dataObj) {
     const ctx = document.getElementById(canvasId);
     if (!ctx) return;
-    if (chartInstances[canvasId]) {
-      chartInstances[canvasId].destroy();
-      delete chartInstances[canvasId];
-    }
+    const existingChart = Chart.getChart(ctx);
+    if (existingChart) existingChart.destroy();
 
     const labels = Object.keys(dataObj);
     const data = Object.values(dataObj);
 
-    chartInstances[canvasId] = new Chart(ctx, {
+    new Chart(ctx, {
       type: 'doughnut',
       data: {
         labels: labels,
@@ -76,7 +69,7 @@ let chartIngresos, chartServicios;
 let isDeleteMode = false;
 let selectedIds = new Set();
 
-if (typeof MAPPING === 'undefined') { var MAPPING = {
+const MAPPING = {
   nombre: ['Nombre', 'Nombre del Cliente', 'Nombre del Proyecto', 'Nombre/Tema', 'Actividad/Tema', 'Nombre del Contacto'],
   correo: ['Correo', 'Correo Electrónico'],
   telefono: ['Teléfono', 'Teléfono Principal'],
@@ -115,14 +108,10 @@ if (typeof MAPPING === 'undefined') { var MAPPING = {
   problema: ['Problema'],
   implicacion: ['Implicacion'],
   necesidad: ['Necesidad'],
-  nombrenegocio: ['Nombre del Negocio'],
-  giro: ['Giro'],
-  cantidad: ['Cantidad'],
-  indicador: ['Indicador'],
-  proximaaccion: ['Próxima acción']
+  giro: ['Giro']
 };
 
-if (typeof ETAPAS_MAP === 'undefined') { var ETAPAS_MAP = {
+const ETAPAS_MAP = {
   '1': '1 → Activación',
   '2': '2 → Diagnóstico',
   '3': '3 → Calendario de Contenido',
@@ -131,7 +120,6 @@ if (typeof ETAPAS_MAP === 'undefined') { var ETAPAS_MAP = {
   '6': '6 → Reporte de Resultados',
   '7': '<i class="ph-bold ph-arrows-clockwise" style="vertical-align:middle; margin-right:4px;"></i> Renovación'
 };
-} // end if ETAPAS_MAP undefined
 
 function formatEtapa(val) {
   return ETAPAS_MAP[String(val)] || val || '—';
@@ -226,7 +214,7 @@ function navigateTo(section) {
   document.getElementById(`section-${section}`)?.classList.remove('hidden');
   document.getElementById(`nav-${section}`)?.classList.add('active');
   
-  document.getElementById('btnAdd').style.display = (section === 'dashboard' || section === 'citas') ? 'none' : 'inline-block';
+  document.getElementById('btnAdd').style.display = section === 'dashboard' ? 'none' : 'inline-block';
   document.getElementById('btnDeleteMode').style.display = (section === 'dashboard' || section === 'citas') ? 'none' : 'inline-block';
   if (isDeleteMode) toggleDeleteMode();
 
@@ -237,9 +225,11 @@ function navigateTo(section) {
     proyectos: ['Proyectos', 'Control de proyectos activos'],
     pipeline: ['Pipeline', 'Etapas de entrega por proyecto'],
     tareas: ['Tareas', 'Pendientes del equipo'],
-    citas: ['Agenda', 'Agenda de reuniones'],
+    citas: ['Citas', 'Agenda de reuniones'],
 
     actividades: ['Registrar Actividad', 'Agrega tu avance del día'],
+
+    pagos_gastos: ['Pagos y Gastos', 'Control de ingresos y egresos'],
   };
   const [title, sub] = titles[section] || ['', ''];
   document.getElementById('pageTitle').textContent = title;
@@ -328,6 +318,7 @@ function loadSection(section) {
     tareas: loadTareas,
     citas: loadCitas,
     actividades: loadActividades,
+    pagos_gastos: loadPagosGastos,
   };
   loaders[section]?.();
 }
@@ -355,64 +346,47 @@ window.prospectosData = [];
 async function loadProspectos() {
   if (!window.asesoresData) window.asesoresData = await fetch(`${API}/api/asesores`).then(r => r.json());
   window.prospectosData = await fetch(`${API}/api/prospectos`).then(r => r.json());
-  loadPipelineProspectos();
-  renderProspectosTable();
-}
-
-function renderProspectosTable() {
   const data = filterByDate(window.prospectosData);
 
   // ── Botón de Campaña movido a index.html estático ──────────
 
   const tbody = document.querySelector('#tableProspectos tbody');
-  tbody.innerHTML = data.length ? data.map(r => {
-    const esc = (key1, key2) => escapeHtml(r[key1] || (key2 ? r[key2] : '') || '');
-    return `
-    <tr class="clickable-row" onclick="viewRecord('prospectos', '${esc('ID Prospectos')}')">
-      <td><input type="checkbox" class="row-checkbox" value="${esc('ID Prospectos')}" onclick="event.stopPropagation(); toggleSelection(this.value, this.checked)"></td>
-      <td><strong>${esc('Nombre del Contacto', 'Nombre') || '—'}</strong></td>
-      <td><strong>${esc('Nombre del Negocio', 'nombreNegocio') || '—'}</strong></td>
-      <td>${esc('Correo Electrónico', 'Correo') || '—'}</td>
-      <td>${esc('Teléfono') || '—'}</td>
-      <td><span class="badge badge-blue">${esc('Medio de contacto') || '—'}</span></td>
-      <td>${esc('Fecha de Registro') || '—'}</td>
-      <td title="${esc('Notas')}">${truncate(esc('Notas'), 40)}</td>
-      <td>${esc('Asesor') || '—'}</td>
-      <td>${esc('Situacion') || '—'}</td>
-      <td>${esc('Problema') || '—'}</td>
-      <td>${esc('Implicacion') || '—'}</td>
-      <td>${esc('Necesidad') || '—'}</td>
-      <td>${esc('Giro') || '—'}</td>
-    </tr>`;
-  }).join('') : emptyState();
+  tbody.innerHTML = data.length ? data.map(r => `
+    <tr class="clickable-row" onclick="viewRecord('prospectos', '${r['ID Prospectos'] || ''}')">
+      <td><input type="checkbox" class="row-checkbox" value="${r['ID Prospectos'] || ''}" onclick="event.stopPropagation(); toggleSelection(this.value, this.checked)"><span class="badge badge-purple">${r['ID Prospectos'] || '—'}</span></td>
+      <td><strong>${r['Nombre del Contacto'] || '—'}</strong></td>
+      <td>${r['Correo Electrónico'] || '—'}</td>
+      <td>${r['Teléfono'] || '—'}</td>
+      <td><span class="badge badge-blue">${r['Medio de contacto'] || '—'}</span></td>
+      <td>${r['Fecha de Registro'] || '—'}</td>
+      <td title="${r['Notas'] || ''}">${truncate(r['Notas'], 40)}</td>
+      <td>${r['Asesor'] || '—'}</td>
+      <td>${r['Situacion'] || '—'}</td>
+      <td>${r['Problema'] || '—'}</td>
+      <td>${r['Implicacion'] || '—'}</td>
+      <td>${r['Necesidad'] || '—'}</td>
+    </tr>`).join('') : emptyState();
 }
 
 // ── CLIENTES ─────────────────────────────────────────────────────
 window.clientesData = [];
 async function loadClientes() {
   window.clientesData = await fetch(`${API}/api/clientes`).then(r => r.json());
-  renderClientes();
-}
-
-function renderClientes() {
   const data = filterByDate(window.clientesData);
   const tbody = document.querySelector('#tableClientes tbody');
-  tbody.innerHTML = data.length ? data.map(r => {
-    const esc = (k) => escapeHtml(r[k] || '');
-    return `
-    <tr class="clickable-row" onclick="viewRecord('clientes', '${esc('ID Clientes')}')">
-      <td><input type="checkbox" class="row-checkbox" value="${esc('ID Clientes')}" onclick="event.stopPropagation(); toggleSelection(this.value, this.checked)"></td>
-      <td><strong>${esc('Nombre del Cliente') || '—'}</strong></td>
-      <td>${esc('Empresa o Razón Social') || '—'}</td>
-      <td>${esc('Correo Electrónico') || '—'}</td>
-      <td>${esc('Teléfono Principal') || '—'}</td>
-      <td>${statusBadge(esc('Estado'))}</td>
-      <td>${esc('Servicios contratados') || '—'}</td>
+  tbody.innerHTML = data.length ? data.map(r => `
+    <tr class="clickable-row" onclick="viewRecord('clientes', '${r['ID Clientes'] || ''}')">
+      <td><input type="checkbox" class="row-checkbox" value="${r['ID Clientes'] || ''}" onclick="event.stopPropagation(); toggleSelection(this.value, this.checked)"><span class="badge badge-blue">${r['ID Clientes'] || '—'}</span></td>
+      <td><strong>${r['Nombre del Cliente'] || '—'}</strong></td>
+      <td>${r['Empresa o Razón Social'] || '—'}</td>
+      <td>${r['Correo Electrónico'] || '—'}</td>
+      <td>${r['Teléfono Principal'] || '—'}</td>
+      <td>${statusBadge(r['Estado'])}</td>
+      <td>${r['Servicios contratados'] || '—'}</td>
       <td>${r['Valor mensual'] ? '$' + parseFloat(r['Valor mensual']).toLocaleString() : '—'}</td>
-      <td>${priorityBadge(esc('Prioridad'))}</td>
-      <td>${esc('Giro') || '—'}</td>
-    </tr>`;
-  }).join('') : emptyState();
+      <td>${priorityBadge(r['Prioridad'])}</td>
+      <td>${r['Giro'] || '—'}</td>
+    </tr>`).join('') : emptyState();
 }
 
 // ── PROYECTOS ────────────────────────────────────────────────────
@@ -422,10 +396,6 @@ async function loadProyectos() {
     try { window.citasData = await fetch(`${API}/api/citas`).then(r => r.json()); } catch(e) {}
   }
   window.proyectosData = await fetch(`${API}/api/proyectos`).then(r => r.json());
-  renderProyectos();
-}
-
-function renderProyectos() {
   const data = filterByDate(window.proyectosData);
 
   // ── Botón de Reporte movido a index.html estático ────────────
@@ -469,13 +439,12 @@ function renderProyectos() {
       }
     }
 
-    const esc = (k) => escapeHtml(r[k] || '');
-    return `<tr class="clickable-row" onclick="viewRecord('proyectos', '${esc('ID Proyectos')}')">
-      <td><input type="checkbox" class="row-checkbox" value="${esc('ID Proyectos')}" onclick="event.stopPropagation(); toggleSelection(this.value, this.checked)"></td>
-      <td><strong>${esc('Nombre del Proyecto') || '—'}</strong></td>
-      <td>${escapeHtml(clientName)}</td>
-      <td>${esc('Servicio') || '—'}</td>
-      <td style="white-space:nowrap; font-weight:600; color:var(--text2);">${escapeHtml(nextMeeting)}</td>
+    return `<tr class="clickable-row" onclick="viewRecord('proyectos', '${r['ID Proyectos'] || ''}')">
+      <td><input type="checkbox" class="row-checkbox" value="${r['ID Proyectos'] || ''}" onclick="event.stopPropagation(); toggleSelection(this.value, this.checked)"><span class="badge badge-purple">${r['ID Proyectos'] || '—'}</span></td>
+      <td><strong>${r['Nombre del Proyecto'] || '—'}</strong></td>
+      <td>${clientName}</td>
+      <td>${r['Servicio'] || '—'}</td>
+      <td style="white-space:nowrap; font-weight:600; color:var(--text2);">${nextMeeting}</td>
       <td>
         <select class="pill-select ${estadoClase}" onclick="event.stopPropagation()" onchange="updateProyectoSelect('${r['ID Proyectos']}','estado','Estado del Proyecto',this.value); this.className='pill-select '+({'Activo':'pill-estado-activo','Reunión':'pill-estado-reunion','Cerrado':'pill-estado-cerrado'}[this.value]||'pill-estado-default')">
           <option value="Activo"  ${r['Estado del Proyecto'] === 'Activo'  ? 'selected' : ''}>Activo</option>
@@ -550,10 +519,6 @@ async function loadPipeline() {
     try { window.tareasData = await fetch(`${API}/api/tareas`).then(r => r.json()); } catch(e) {}
   }
   window.pipelineData = await fetch(`${API}/api/proyectos`).then(r => r.json());
-  renderPipeline();
-}
-
-function renderPipeline() {
   const data = filterByDate(window.pipelineData);
   const board = document.getElementById('kanban-pipeline');
   
@@ -572,7 +537,6 @@ function renderPipeline() {
     card.setAttribute('data-id', r['ID Proyectos']);
     
     card.addEventListener('dragstart', e => {
-      e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', JSON.stringify({ id: r['ID Proyectos'], type: 'proyectos' }));
       e.target.style.opacity = '0.5';
     });
@@ -599,7 +563,7 @@ function renderPipeline() {
           const badgeClass = t['Estado'] === 'En Proceso' ? 'badge-blue' : 'badge-orange';
           linkedTasksHtml += `
             <div style="font-size:11.5px; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
-              
+              <span class="badge ${badgeClass}" style="font-size:9.5px; padding:2px 5px;">${t['ID Tarea']}</span>
               <span style="color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${t['Tarea'] || ''}">${t['Tarea'] || '—'}</span>
             </div>
           `;
@@ -608,32 +572,24 @@ function renderPipeline() {
       }
     }
 
-    const esc = (k) => escapeHtml(r[k] || '');
     card.innerHTML = `
-      <div class="kanban-card-header">
-        <input type="checkbox" class="row-checkbox" value="${esc('ID Proyectos')}" onclick="event.stopPropagation(); toggleSelection(this.value, this.checked)">
-        <span class="kanban-card-date">${esc('Próxima reunión') || 'Sin reunión'}</span>
+      <div class="kanban-card-header" onclick="viewRecord('proyectos', '${r['ID Proyectos']}')">
+        <input type="checkbox" class="row-checkbox" value="${r['ID Proyectos']}" onclick="event.stopPropagation(); toggleSelection(this.value, this.checked)">
+        <span class="badge badge-purple">${r['ID Proyectos'] || '—'}</span>
+        <span class="kanban-card-date">${r['Próxima reunión'] || 'Sin reunión'}</span>
       </div>
-      <div class="kanban-card-title">${esc('Nombre del Proyecto') || '—'}</div>
-      <div class="kanban-card-body">
-        <p><strong>Cliente:</strong> ${escapeHtml(clientName)}</p>
-        <p><strong>Servicio:</strong> ${esc('Servicio') || '—'}</p>
-        <p title="${esc('Notas')}">${truncate(esc('Notas'), 30)}</p>
+      <div class="kanban-card-title" onclick="viewRecord('proyectos', '${r['ID Proyectos']}')">${r['Nombre del Proyecto'] || '—'}</div>
+      <div class="kanban-card-body" onclick="viewRecord('proyectos', '${r['ID Proyectos']}')">
+        <p><strong>Cliente:</strong> ${clientName}</p>
+        <p><strong>Servicio:</strong> ${r['Servicio'] || '—'}</p>
+        <p title="${r['Notas'] || ''}">${truncate(r['Notas'], 30)}</p>
         ${linkedTasksHtml}
       </div>
       <div class="kanban-card-footer">
-        <span class="kanban-card-resp">Avance: ${esc('% Avance') || '0%'}</span>
-        <button class="kanban-move-btn" onclick="event.stopPropagation(); showMoveMenu(this.closest('.kanban-card'), '${esc('ID Proyectos')}', 'proyectos')" title="Mover de etapa">
-          <i class="ph ph-arrows-left-right"></i>
-        </button>
-        ${pipelineStatusBadge(esc('Estado del Proyecto'))}
+        <span class="kanban-card-resp">Avance: ${r['% Avance'] || '0%'}</span>
+        ${pipelineStatusBadge(r['Estado del Proyecto'])}
       </div>
     `;
-    // Click on card body opens record details (but not on drag)
-    card.addEventListener('click', (ev) => {
-      if (ev.target.closest('.row-checkbox') || ev.target.closest('.kanban-move-btn')) return;
-      viewRecord('proyectos', r['ID Proyectos']);
-    });
     col.appendChild(card);
   });
 
@@ -641,89 +597,6 @@ function renderPipeline() {
     const count = col.querySelectorAll('.kanban-card').length;
     col.querySelector('.kanban-count').textContent = count;
   });
-}
-
-// ── PIPELINE PROSPECTOS ──────────────────────────────────────────
-async function loadPipelineProspectos() {
-  window.prospectosData = await fetch(`${API}/api/prospectos`).then(r => r.json());
-  
-  const board = document.getElementById('kanban-pipeline-prospectos');
-  
-  board.querySelectorAll('.kanban-cards').forEach(el => el.innerHTML = '');
-  board.querySelectorAll('.kanban-count').forEach(el => el.textContent = '0');
-
-  window.prospectosData.forEach(r => {
-    const etapa = r['Etapa'] || 'Nuevo'; 
-    const col = board.querySelector(`.kanban-col[data-status="${etapa}"] .kanban-cards`);
-    if (!col) return;
-    
-    const card = document.createElement('div');
-    card.className = 'kanban-card';
-    card.setAttribute('draggable', 'true');
-    card.setAttribute('data-id', r['ID Prospectos']);
-    
-    card.addEventListener('dragstart', e => {
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', JSON.stringify({ id: r['ID Prospectos'], type: 'prospectos_pipeline' }));
-      e.target.style.opacity = '0.5';
-    });
-    card.addEventListener('dragend', e => {
-      e.target.style.opacity = '1';
-    });
-
-    const prospectName = r['Nombre del Contacto'] || r['Nombre'] || '—';
-
-    const esc = (k) => escapeHtml(r[k] || '');
-    card.innerHTML = `
-      <div class="kanban-card-header">
-        <span class="kanban-card-date">${esc('Fecha de Registro') || ''}</span>
-      </div>
-      <div class="kanban-card-title">${escapeHtml(prospectName)}</div>
-      <div class="kanban-card-body">
-        <p><strong>Asesor:</strong> ${esc('Asesor') || '—'}</p>
-        <p title="${esc('Notas')}">${truncate(esc('Notas'), 40)}</p>
-      </div>
-      <div class="kanban-card-footer">
-        <span class="kanban-card-resp">${esc('Medio de contacto') || ''}</span>
-        <button class="kanban-move-btn" onclick="event.stopPropagation(); showMoveMenu(this.closest('.kanban-card'), '${esc('ID Prospectos')}', 'prospectos_pipeline')" title="Mover de etapa">
-          <i class="ph ph-arrows-left-right"></i>
-        </button>
-      </div>
-    `;
-    card.addEventListener('click', (ev) => {
-      if (ev.target.closest('.kanban-move-btn')) return;
-      viewRecord('prospectos', r['ID Prospectos']);
-    });
-    col.appendChild(card);
-  });
-
-  board.querySelectorAll('.kanban-col').forEach(col => {
-    const count = col.querySelectorAll('.kanban-card').length;
-    col.querySelector('.kanban-count').textContent = count;
-  });
-}
-
-function switchPipeline(type) {
-  const btnProyectos = document.getElementById('tab-pipeline-proyectos');
-  const btnProspectos = document.getElementById('tab-pipeline-prospectos');
-  const containerProyectos = document.getElementById('pipeline-proyectos-container');
-  const containerProspectos = document.getElementById('pipeline-prospectos-container');
-  
-  if (type === 'proyectos') {
-    btnProyectos.classList.add('active');
-    btnProspectos.classList.remove('active');
-    
-    containerProyectos.style.display = 'block';
-    containerProspectos.style.display = 'none';
-    loadPipeline();
-  } else {
-    btnProspectos.classList.add('active');
-    btnProyectos.classList.remove('active');
-    
-    containerProspectos.style.display = 'block';
-    containerProyectos.style.display = 'none';
-    loadPipelineProspectos();
-  }
 }
 
 // ── TAREAS ───────────────────────────────────────────────────────
@@ -748,7 +621,6 @@ async function loadTareas() {
     card.setAttribute('data-id', r['ID Tarea']);
     
     card.addEventListener('dragstart', e => {
-      e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', JSON.stringify({ id: r['ID Tarea'], type: 'tareas' }));
       e.target.style.opacity = '0.5';
     });
@@ -756,31 +628,24 @@ async function loadTareas() {
       e.target.style.opacity = '1';
     });
 
-    const esc = (k) => escapeHtml(r[k] || '');
     card.innerHTML = `
-      <div class="kanban-card-header">
-        <input type="checkbox" class="row-checkbox" value="${esc('ID Tarea')}" onclick="event.stopPropagation(); toggleSelection(this.value, this.checked)">
-        ${priorityBadge(esc('Prioridad'))}
+      <div class="kanban-card-header" onclick="viewRecord('tareas', '${r['ID Tarea']}')">
+        <input type="checkbox" class="row-checkbox" value="${r['ID Tarea']}" onclick="event.stopPropagation(); toggleSelection(this.value, this.checked)">
+        <span class="badge badge-orange">${r['ID Tarea'] || '—'}</span>
+        ${priorityBadge(r['Prioridad'])}
       </div>
-      <div class="kanban-card-title">${esc('Tarea') || '—'}</div>
-      <div class="kanban-card-body">
-        <p><strong>Cat:</strong> ${esc('Categoría') || '—'}</p>
-        <p><strong>Proyecto:</strong> ${esc('ID Proyecto') || '—'}</p>
-        <p><strong>Límite:</strong> ${esc('Fecha límite') || '—'}</p>
-        ${r['Comentarios'] ? `<p title="${esc('Comentarios')}">${truncate(esc('Comentarios'), 40)}</p>` : ''}
+      <div class="kanban-card-title" onclick="viewRecord('tareas', '${r['ID Tarea']}')">${r['Tarea'] || '—'}</div>
+      <div class="kanban-card-body" onclick="viewRecord('tareas', '${r['ID Tarea']}')">
+        <p><strong>Cat:</strong> ${r['Categoría'] || '—'}</p>
+        <p><strong>Proyecto:</strong> ${r['ID Proyecto'] || '—'}</p>
+        <p><strong>Límite:</strong> ${r['Fecha límite'] || '—'}</p>
+        ${r['Comentarios'] ? `<p title="${r['Comentarios']}">${truncate(r['Comentarios'], 40)}</p>` : ''}
       </div>
       <div class="kanban-card-footer">
-        <span class="kanban-card-resp">${esc('Responsable') || '—'}</span>
-        <button class="kanban-move-btn" onclick="event.stopPropagation(); showMoveMenu(this.closest('.kanban-card'), '${esc('ID Tarea')}', 'tareas')" title="Mover estado">
-          <i class="ph ph-arrows-left-right"></i>
-        </button>
-        ${taskStatusBadge(escapeHtml(estado))}
+        <span class="kanban-card-resp">${r['Responsable'] || '—'}</span>
+        ${taskStatusBadge(estado)}
       </div>
     `;
-    card.addEventListener('click', (ev) => {
-      if (ev.target.closest('.row-checkbox') || ev.target.closest('.kanban-move-btn')) return;
-      viewRecord('tareas', r['ID Tarea']);
-    });
     col.appendChild(card);
   });
 
@@ -818,36 +683,35 @@ async function loadCitas() {
 
     return {
       id: r['ID Citas'],
-      title: escapeHtml(r['Nombre'] || r['Nombre/Tema'] || 'Cita'),
+      title: r['Nombre'] || r['Nombre/Tema'] || 'Cita',
       start: startStr,
       extendedProps: {
-        tipo: escapeHtml(r['Tipo'] || r['Tipo de reunión']),
-        responsable: escapeHtml(r['Responsable']),
-        proyecto: escapeHtml(r['ID Proyecto']),
-        cliente: escapeHtml(r['ID Cliente']),
-        notas: escapeHtml(r['Notas'] || r['Resultado'])
+        tipo: r['Tipo'] || r['Tipo de reunión'],
+        responsable: r['Responsable'],
+        proyecto: r['ID Proyecto'],
+        cliente: r['ID Cliente'],
+        notas: r['Notas'] || r['Resultado']
       }
     };
   });
-  const calendarEl = document.getElementById('calendar');
-  if (calendarEl) {
-    if (calendarInstance) calendarInstance.destroy();
 
-    calendarInstance = new FullCalendar.Calendar(calendarEl, {
-      initialView: 'dayGridMonth',
-      headerToolbar: {
-        left: 'prev,next today',
-        center: 'title',
-        right: 'dayGridMonth,timeGridWeek,timeGridDay'
-      },
-      events: events,
-      eventClick: function(info) {
-        viewRecord('citas', info.event.id);
-      }
-    });
-    
-    calendarInstance.render();
-  }
+  const calendarEl = document.getElementById('calendar');
+  if (calendarInstance) calendarInstance.destroy();
+
+  calendarInstance = new FullCalendar.Calendar(calendarEl, {
+    initialView: 'dayGridMonth',
+    headerToolbar: {
+      left: 'prev,next today',
+      center: 'title',
+      right: 'dayGridMonth,timeGridWeek,timeGridDay'
+    },
+    events: events,
+    eventClick: function(info) {
+      viewRecord('citas', info.event.id);
+    }
+  });
+  
+  calendarInstance.render();
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────
@@ -862,6 +726,7 @@ async function loadDashboard() {
   try {
     window.clientesData = await fetch(`${API}/api/clientes`).then(r => r.json()).catch(() => []);
     window.proyectosData = await fetch(`${API}/api/proyectos`).then(r => r.json()).catch(() => []);
+    window.pipelineData = await fetch(`${API}/api/pipeline_de_proyecto`).then(r => r.json()).catch(() => []);
     window.citasData = await fetch(`${API}/api/citas`).then(r => r.json()).catch(() => []);
     window.asesoresData = await fetch(`${API}/api/asesores`).then(r => r.json()).catch(() => []);
     window.prospectosData = await fetch(`${API}/api/prospectos`).then(r => r.json()).catch(() => []);
@@ -870,6 +735,7 @@ async function loadDashboard() {
     
     const clientes = filterByDate(Array.isArray(window.clientesData) ? window.clientesData : []);
     const proyectos = filterByDate(Array.isArray(window.proyectosData) ? window.proyectosData : []);
+    const pipeline = filterByDate(Array.isArray(window.pipelineData) ? window.pipelineData : []);
     const citas = filterByDate(Array.isArray(window.citasData) ? window.citasData : []);
     const prospectos = filterByDate(Array.isArray(window.prospectosData) ? window.prospectosData : []);
     const tareas = filterByDate(Array.isArray(window.tareasData) ? window.tareasData : []);
@@ -963,19 +829,21 @@ async function loadDashboard() {
     let sumTiempo = 0;
     let countTiempo = 0;
     const pipelineEtapas = {};
-    proyectos.forEach(p => {
-      let rawE = p['Etapa actual'] || '1';
-      let e = rawE;
-      if (['1','2','3','4','5','6','7'].includes(String(rawE))) {
-        e = formatEtapa(rawE).replace(/<[^>]*>?/gm, ''); // Remove HTML
-        if (e.includes('→')) e = e.split('→')[1].trim(); // Clean text
-      }
+    pipeline.forEach(p => {
+      const e = p['Etapa'] || 'Desconocida';
       pipelineEtapas[e] = (pipelineEtapas[e] || 0) + 1;
       
-      const d = p['Días sin movimiento'];
+      const d = p['Duración'];
       if(d && !isNaN(parseInt(d))) {
           sumTiempo += parseInt(d);
           countTiempo++;
+      } else if (p['Fecha Inicio'] && p['Fecha Fin']) {
+        const d1 = new Date(p['Fecha Inicio']);
+        const d2 = new Date(p['Fecha Fin']);
+        if (!isNaN(d1) && !isNaN(d2)) {
+          sumTiempo += (d2 - d1) / (1000 * 60 * 60 * 24);
+          countTiempo++;
+        }
       }
     });
     if (document.getElementById('kpiTiempoEtapa')) document.getElementById('kpiTiempoEtapa').textContent = countTiempo > 0 ? Math.round(sumTiempo / countTiempo) : '0';
@@ -1038,6 +906,7 @@ function openModal(title, body) {
       case 'pipeline': body = formPipeline(); break;
       case 'tareas': body = formTarea(); break;
       case 'citas': body = formCita(); break;
+      case 'pagos_gastos': body = formPagosGastos(); break;
       case 'actividades': body = formActividad(); break;
       default: body = '<p class="text-muted">No hay formulario disponible para esta sección.</p>';
     }
@@ -1077,8 +946,6 @@ function formProspecto() {
           <option value="Evento">Evento</option>
         </select>
       </div>
-      <div class="form-group"><label>Nombre del Negocio</label><input name="nombreNegocio"></div>
-      <div class="form-group"><label>Giro</label><input name="giro"></div>
       <div class="form-group full"><label>Notas</label><input name="notas"></div>
       <div class="form-group full-width"><label>Situación</label><textarea name="situacion"></textarea></div>
       <div class="form-group full-width"><label>Problema</label><textarea name="problema"></textarea></div>
@@ -1314,15 +1181,18 @@ async function submitForm(event, endpoint, id = null) {
     const result = await r.json();
     if (result.success) {
       closeModal();
+      const recordId = id || result.id || result.newId || null;
       showToast('<i class="ph-fill ph-check-circle" style="color:#10b981; vertical-align:middle; margin-right:4px;"></i> Registro guardado en Google Sheets');
       // ── WEBHOOK DISPATCH ─────────────────────────────────────
       const triggerSrc = id ? 'update' : 'create';
-      const recordId   = id || result.id || result.newId || null;
       if (typeof dispatchWebhook === 'function') {
         dispatchWebhook(endpoint, triggerSrc, recordId, body);
       }
       // ─────────────────────────────────────────────────────────
       loadSection(currentSection);
+      if (endpoint === 'pagos_gastos' && recordId) {
+        setTimeout(() => descargarVoucher(recordId), 500);
+      }
     } else {
       showToast('<i class="ph-fill ph-x-circle" style="color:#ef4444; vertical-align:middle; margin-right:4px;"></i> Error: ' + result.error, true);
     }
@@ -1334,34 +1204,32 @@ async function submitForm(event, endpoint, id = null) {
   }
 }
 
-// ── TABLE FILTER (debounced) ──────────────────────────────────────
-const filterTable = (function() {
-  let timer;
-  return function(tableId, query) {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      const q = query.toLowerCase();
-      const rows = document.querySelectorAll(`#${tableId} tbody tr`);
-      rows.forEach(row => {
-        row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
-      });
-    }, 200);
-  };
-})();
+// ── TABLE FILTER ──────────────────────────────────────────────────
+function filterTable(tableId, query) {
+  const q = query.toLowerCase();
+  const rows = document.querySelectorAll(`#${tableId} tbody tr`);
+  rows.forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
 
-const filterKanban = (function() {
-  let timer;
-  return function(boardId, query) {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      const q = query.toLowerCase();
-      const cards = document.querySelectorAll(`#${boardId} .kanban-card`);
-      cards.forEach(card => {
-        card.style.display = card.textContent.toLowerCase().includes(q) ? '' : 'none';
-      });
-    }, 200);
-  };
-})();
+function filterKanban(boardId, query) {
+  const q = query.toLowerCase();
+  const cards = document.querySelectorAll(`#${boardId} .kanban-card`);
+  cards.forEach(card => {
+    card.style.display = card.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function filterTableByTipo() {
+  const tipo = document.getElementById('filterTipo').value;
+  const rows = document.querySelectorAll('#tablePagosGastos tbody tr');
+  rows.forEach(row => {
+    if (!tipo) { row.style.display = ''; return; }
+    const cell = row.querySelector('td:nth-child(2)');
+    row.style.display = cell && cell.textContent.trim() === tipo ? '' : 'none';
+  });
+}
 
 // ── HELPERS ───────────────────────────────────────────────────────
 function truncate(str, n) { return str && str.length > n ? str.substring(0, n) + '...' : (str || ''); }
@@ -1394,282 +1262,73 @@ function emptyState() {
 // ── TOAST ─────────────────────────────────────────────────────────
 function showToast(msg, isError = false) {
   const toast = document.getElementById('toast');
-  if (!toast) return;
-  // Use innerHTML so icons render correctly
-  toast.innerHTML = msg;
-  toast.style.borderColor = isError ? 'var(--red)' : 'var(--green)';
-  toast.style.color = isError ? 'var(--red)' : 'var(--green)';
+  toast.textContent = msg;
+  toast.style.borderColor = isError ? 'var(--accent-red)' : 'var(--accent-green)';
+  toast.style.color = isError ? 'var(--accent-red)' : 'var(--accent-green)';
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), 3500);
 }
 
 // ── INIT ──────────────────────────────────────────────────────────
-window.initLegacyApp = function() {
-  loadDashboard();
-  initKanbanDragDrop();
-};
+loadDashboard();
 
-function initKanbanDragDrop() {
+// ── KANBAN DRAG & DROP LOGIC ──────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
   const cols = document.querySelectorAll('.kanban-col');
   cols.forEach(col => {
-    // Prevent attaching multiple times if initKanbanDragDrop is called again
-    if (col.dataset.dragAttached) return;
-    col.dataset.dragAttached = 'true';
-
-    col.addEventListener('dragover', e => { 
-      e.preventDefault(); 
-      col.style.background = '#eef2ff'; 
-    });
-    
-    col.addEventListener('dragleave', e => { 
-      col.style.background = '#f4f5f7'; 
-    });
-    
+    col.addEventListener('dragover', e => { e.preventDefault(); col.style.background = '#eef2ff'; });
+    col.addEventListener('dragleave', e => { col.style.background = '#f4f5f7'; });
     col.addEventListener('drop', async e => {
       e.preventDefault();
       col.style.background = '#f4f5f7';
       const newStatus = col.getAttribute('data-status');
       if (!newStatus) return;
-      
       try {
-        const textData = e.dataTransfer.getData('text/plain');
-        if (!textData) { showToast('Error drag: No dataTransfer', true); return; }
-        
-        let data;
-        try {
-          data = JSON.parse(textData);
-        } catch (err) {
-          showToast('DataTransfer no es JSON válido', true);
-          return;
-        }
-
+        const data = JSON.parse(e.dataTransfer.getData('text/plain'));
         const { id, type } = data;
         let record = null;
         let endpoint = '';
-        
         if (type === 'proyectos') {
-          record = window.pipelineData.find(r => String(r['ID Proyectos']).trim() === String(id).trim());
+          record = window.pipelineData.find(r => r['ID Proyectos'] === id);
           endpoint = 'proyectos';
         } else if (type === 'tareas') {
-          record = window.tareasData.find(r => String(r['ID Tarea']).trim() === String(id).trim());
+          record = window.tareasData.find(r => r['ID Tarea'] === id);
           endpoint = 'tareas';
-        } else if (type === 'prospectos_pipeline') {
-          record = window.prospectosData.find(r => String(r['ID Prospectos']).trim() === String(id).trim());
-          endpoint = 'prospectos';
         }
         
+        // For proyectos, the column data-status represents 'Etapa actual'
         const isProyectos = type === 'proyectos';
-        const isProspectos = type === 'prospectos_pipeline';
-        
-        let currentStatus = '';
-        if (isProyectos) currentStatus = record['Etapa actual'];
-        else if (isProspectos) currentStatus = record['Etapa'];
-        else currentStatus = record['Estado'];
-        
-        if (!record || String(currentStatus).trim() === String(newStatus).trim()) return;
+        const currentStatus = isProyectos ? record['Etapa actual'] : record['Estado'];
+        if (!record || currentStatus === newStatus) return;
         
         const payload = {};
         if (isProyectos) {
           payload.etapa = newStatus;
           record['Etapa actual'] = newStatus;
-          // Optimistic UI update without fetching stale data
-          renderPipeline();
-        } else if (isProspectos) {
-          payload.etapa = newStatus;
-          record['Etapa'] = newStatus;
-          loadPipelineProspectos();
+          loadPipeline();
         } else {
           payload.estado = newStatus;
           record['Estado'] = newStatus;
           loadTareas();
         }
-
         showToast(`Moviendo a ${newStatus}...`);
-        
         const res = await fetch(`${API}/api/${endpoint}/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        
-        if (!res.ok) { 
-          const errData = await res.json().catch(()=>({})); 
-          throw new Error(errData.message || errData.error || 'Error al guardar el estado'); 
-        }
-        
+        if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.message || e.error || 'Error al guardar el estado'); }
         // ── WEBHOOK DISPATCH (kanban drag) ───────────────────
         if (typeof dispatchWebhook === 'function') {
           dispatchWebhook(endpoint, 'update', id, { ...payload, id });
         }
         // ────────────────────────────────────────────────────
-        
         showToast('Guardado correctamente');
-        // Reload from server just like original code
-        if (isProyectos) await loadPipeline(); 
-        else if (isProspectos) await loadPipelineProspectos(); 
-        else await loadTareas();
-        
-      } catch (err) { 
-        showToast(err.message, true); 
-        // Revert UI on error
-        if (type === 'proyectos') await loadPipeline(); 
-        else if (type === 'prospectos_pipeline') await loadPipelineProspectos(); 
-        else await loadTareas();
-      }
+        if (isProyectos) await loadPipeline(); else await loadTareas();
+      } catch (err) { showToast(err.message, true); }
     });
   });
-}
-
-// Click-to-move logic
-async function handleKanbanMoveClick(id, type, newStatus) {
-  let record = null;
-  let endpoint = '';
-
-  if (type === 'proyectos') {
-    record = (window.pipelineData || []).find(r => String(r['ID Proyectos']).trim() === String(id).trim());
-    endpoint = 'proyectos';
-  } else if (type === 'tareas') {
-    record = (window.tareasData || []).find(r => String(r['ID Tarea']).trim() === String(id).trim());
-    endpoint = 'tareas';
-  } else if (type === 'prospectos_pipeline') {
-    record = (window.prospectosData || []).find(r => String(r['ID Prospectos']).trim() === String(id).trim());
-    endpoint = 'prospectos';
-  }
-
-  if (!record) return;
-
-  const isProyectos = type === 'proyectos';
-  const isProspectos = type === 'prospectos_pipeline';
-
-  let currentStatus = '';
-  if (isProyectos) currentStatus = String(record['Etapa actual'] || '1');
-  else if (isProspectos) currentStatus = String(record['Etapa'] || 'Nuevo');
-  else currentStatus = String(record['Estado'] || '');
-
-  if (String(currentStatus).trim() === String(newStatus).trim()) return;
-
-  const payload = {};
-  if (isProyectos) {
-    payload.etapa = newStatus;
-    record['Etapa actual'] = newStatus;
-    loadPipeline();
-  } else if (isProspectos) {
-    payload.etapa = newStatus;
-    record['Etapa'] = newStatus;
-    loadPipelineProspectos();
-  } else {
-    payload.estado = newStatus;
-    record['Estado'] = newStatus;
-    loadTareas();
-  }
-
-  showToast(`Moviendo a etapa ${newStatus}...`);
-
-  try {
-    const res = await fetch(`${API}/api/${endpoint}/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => ({}));
-      throw new Error(errBody.error || errBody.message || `Error HTTP ${res.status}`);
-    }
-
-    if (typeof dispatchWebhook === 'function') {
-      dispatchWebhook(endpoint, 'update', id, { ...payload, id });
-    }
-
-    showToast('✅ ¡Etapa actualizada!');
-    if (isProyectos) await loadPipeline();
-    else if (isProspectos) await loadPipelineProspectos();
-    else await loadTareas();
-  } catch (err) {
-    showToast(`❌ Error: ${err.message}`, true);
-    if (isProyectos) await loadPipeline();
-    else if (isProspectos) await loadPipelineProspectos();
-    else await loadTareas();
-  }
-}
-
-// Click-to-move menu popover
-function showMoveMenu(cardElement, id, type) {
-  document.querySelectorAll('.kanban-move-menu').forEach(m => m.remove());
-
-  let columns = [];
-  if (type === 'proyectos') {
-    columns = [
-      { value: '1', label: '1 → Activación' },
-      { value: '2', label: '2 → Diagnóstico' },
-      { value: '3', label: '3 → Calendario' },
-      { value: '4', label: '4 → Creación Cont.' },
-      { value: '5', label: '5 → Campaña' },
-      { value: '6', label: '6 → Reporte' },
-      { value: '7', label: '7 → Renovación' },
-    ];
-  } else if (type === 'prospectos_pipeline') {
-    columns = [
-      { value: 'Nuevo', label: 'Nuevo' },
-      { value: 'En proceso', label: 'En proceso' },
-      { value: 'En espera', label: 'En espera' },
-      { value: 'Ganando', label: 'Ganando' },
-      { value: 'Cancelado', label: 'Cancelado' },
-    ];
-  } else if (type === 'tareas') {
-    columns = [
-      { value: 'Pendiente', label: 'Pendiente' },
-      { value: 'En Proceso', label: 'En Proceso' },
-      { value: 'Terminado', label: 'Terminado' },
-    ];
-  }
-
-  const menu = document.createElement('div');
-  menu.className = 'kanban-move-menu';
-  menu.style.cssText = 'position:absolute;z-index:999;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,0.15);padding:8px 4px;min-width:180px;';
-  
-  const title = document.createElement('div');
-  title.textContent = 'Mover a etapa:';
-  title.style.cssText = 'font-size:11px;font-weight:700;color:#94a3b8;padding:4px 12px 8px;text-transform:uppercase;letter-spacing:0.5px;';
-  menu.appendChild(title);
-
-  columns.forEach(col => {
-    const btn = document.createElement('button');
-    btn.textContent = col.label;
-    btn.style.cssText = 'display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:none;cursor:pointer;font-size:13px;color:#334155;border-radius:6px;transition:background 0.15s;';
-    btn.onmouseover = () => btn.style.background = '#f1f5f9';
-    btn.onmouseout = () => btn.style.background = 'none';
-    btn.onclick = async (ev) => {
-      ev.stopPropagation();
-      menu.remove();
-      handleKanbanMoveClick(id, type, col.value);
-    };
-    menu.appendChild(btn);
-  });
-
-  const rect = cardElement.getBoundingClientRect();
-  menu.style.position = 'fixed';
-  menu.style.left = rect.right + 'px';
-  menu.style.top = rect.top + 'px';
-  
-  document.body.appendChild(menu);
-  const menuRect = menu.getBoundingClientRect();
-  if (menuRect.right > window.innerWidth) {
-    menu.style.left = (rect.left - menuRect.width) + 'px';
-  }
-  if (menuRect.bottom > window.innerHeight) {
-    menu.style.top = (window.innerHeight - menuRect.height - 10) + 'px';
-  }
-
-  setTimeout(() => {
-    document.addEventListener('click', function closeMenu(ev) {
-      if (!menu.contains(ev.target)) {
-        menu.remove();
-        document.removeEventListener('click', closeMenu);
-      }
-    });
-  }, 10);
-}
+});
 
 // ── RECORD VIEW AND EDIT LOGIC ────────────────────────────────────
 function viewRecord(endpoint, id) {
@@ -1701,11 +1360,10 @@ function viewRecord(endpoint, id) {
   Object.keys(record).forEach(k => {
     if (k === '_rowIndex') return;
     
-    // Hide IDs completely from frontend
-    if (k.toLowerCase().startsWith('id ')) return;
-    
+    // Only show columns that are mapped in the frontend forms or are ID columns
+    const isIdCol = k.toLowerCase().startsWith('id ');
     const isMapped = allMappedColumns.includes(k.toLowerCase());
-    if (!isMapped) return;
+    if (!isIdCol && !isMapped) return;
     
     const val = record[k] || '—';
     const isMuted = val === '—' || val.trim() === '';
@@ -1718,7 +1376,7 @@ function viewRecord(endpoint, id) {
       isEditable = false;
     }
 
-    if (!isEditable) {
+    if (isIdCol || !isEditable) {
       html += `
         <div class="detail-item" style="background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 8px;">
           <div class="detail-label" style="font-weight: 900; font-size: 13px; margin-bottom: 4px; color: #000000;">${k}</div>
@@ -1742,21 +1400,10 @@ function viewRecord(endpoint, id) {
       `;
     }
   });
-  let convertButtonHtml = '';
-  if (endpoint === 'prospectos') {
-    convertButtonHtml = `
-      <button class="btn btn-primary" style="background: linear-gradient(135deg, #10b981, #059669); border:none; display: flex; align-items: center; gap: 6px;" 
-              onclick="convertToCliente('${id}')">
-        <i class="ph ph-user-plus"></i> Convertir a Cliente
-      </button>
-    `;
-  }
-
   html += `
-    <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
-      ${convertButtonHtml}
+    <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
       <button class="btn btn-outline" style="border-color: #fecaca; color: #b91c1c; background: #fef2f2; display: flex; align-items: center; gap: 6px;" 
-              onclick="deleteRecord('${endpoint}', '${id}')">
+              onclick="if(confirm('¿Estás seguro de eliminar este registro?')) { deleteRecord('${endpoint}', '${id}'); closeModal(); }">
         <i class="ph ph-trash"></i> Eliminar Registro
       </button>
     </div>
@@ -1774,54 +1421,13 @@ function viewRecord(endpoint, id) {
   openModal(`Detalles: ${nameForTitle}`, html);
 }
 
-async function convertToCliente(prospectId) {
-  if (!confirm('¿Convertir este prospecto a cliente? Esto creará un nuevo cliente y eliminará el prospecto.')) return;
-  
-  const prospecto = window.prospectosData.find(p => p['ID Prospectos'] === prospectId);
-  if (!prospecto) {
-    showToast('Prospecto no encontrado', true);
-    return;
-  }
-  
-  const payload = {
-    nombre: prospecto['Nombre del Contacto'] || prospecto['Nombre'] || '',
-    empresa: prospecto['Nombre del Negocio'] || prospecto['nombreNegocio'] || '',
-    correo: prospecto['Correo Electrónico'] || prospecto['Correo'] || '',
-    telefono: prospecto['Teléfono'] || '',
-    estado: 'Activo',
-    giro: prospecto['Giro'] || '',
-    prioridad: 'Media',
-    notas: `Convertido desde prospecto. ${prospecto['Notas'] || ''}`
-  };
-  
-  showToast('Convirtiendo a cliente...');
-  try {
-    const res = await fetch(`${API}/api/clientes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    
-    if (res.ok) {
-      await fetch(`${API}/api/prospectos/${prospectId}`, { method: 'DELETE' });
-      showToast('¡Prospecto convertido a cliente!');
-      closeModal();
-      refreshData();
-    } else {
-      showToast('Error al crear el cliente', true);
-    }
-  } catch (err) {
-    showToast(err.message, true);
-  }
-}
-
 function makeEditable(el, endpoint, id, sheetKey, originalVal) {
   if (el.querySelector('input') || el.querySelector('select')) return; // Already editing
   
   if (originalVal === '—') originalVal = '';
   
   let input;
-  if (sheetKey === 'Estado' || sheetKey === 'Prioridad' || sheetKey === 'Estatus' || sheetKey === 'Riesgo' || sheetKey === 'Etapa actual' || sheetKey === 'Etapa') {
+  if (sheetKey === 'Estado' || sheetKey === 'Prioridad' || sheetKey === 'Estatus' || sheetKey === 'Riesgo') {
     input = document.createElement('select');
     let opts = [];
     if (sheetKey === 'Estado') {
@@ -1829,10 +1435,6 @@ function makeEditable(el, endpoint, id, sheetKey, originalVal) {
       else if (endpoint === 'pipeline_de_proyecto') opts = ['En Proceso', 'Completado', 'Bloqueado'];
       else if (endpoint === 'proyectos') opts = ['Activo', 'Reunión', 'Cerrado'];
       else opts = ['Activo', 'Pausado', 'Baja'];
-    }
-    if (sheetKey === 'Etapa actual' || sheetKey === 'Etapa') {
-      if (endpoint === 'proyectos') opts = ['1', '2', '3', '4', '5', '6', '7'];
-      else if (endpoint === 'prospectos') opts = ['Nuevo', 'Contactado', 'Reunión Agendada', 'Propuesta Enviada', 'Negociación', 'Ganado', 'Perdido'];
     }
     if (sheetKey === 'Prioridad') opts = ['Alta', 'Media', 'Baja'];
     if (sheetKey === 'Estatus') opts = ['Al día', 'Atrasado', 'Suspendido'];
@@ -1984,19 +1586,14 @@ async function deleteRecord(endpoint, id) {
     const result = await res.json();
     
     if (result.success) {
-      showToast('Registro eliminado exitosamente');
+      showToast('Registro eliminado exitosamente', 'success');
       closeModal();
       
       // Reload the corresponding view
       if (endpoint === 'clientes') loadClientes();
-      else if (endpoint === 'prospectos') {
-        loadProspectos();
-        if (currentSection === 'pipeline_prospectos') loadPipelineProspectos();
-      }
-      else if (endpoint === 'proyectos') {
-        loadProyectos();
-        if (currentSection === 'pipeline_de_proyecto') loadPipeline();
-      }
+      else if (endpoint === 'prospectos') loadProspectos();
+      else if (endpoint === 'proyectos') loadProyectos();
+      else if (endpoint === 'pipeline_de_proyecto') loadPipeline();
       else if (endpoint === 'tareas') loadTareas();
       else if (endpoint === 'citas') loadCitas();
       else if (endpoint === 'actividades') loadActividades();
@@ -2010,6 +1607,315 @@ async function deleteRecord(endpoint, id) {
 }
 
 // ── ACTIVIDADES (STATISTICS & SUBMIT) ──────────────────────────
+// ── PAGOS Y GASTOS ─────────────────────────────────────────────
+async function loadPagosGastos() {
+  try {
+    const data = await fetch(`${API}/api/pagos_gastos`).then(r => r.json()).catch(() => []);
+    const rows = Array.isArray(data) ? data : [];
+
+    let totalIngresos = 0;
+    let totalGastos = 0;
+
+    rows.forEach(r => {
+      const monto = parseFloat(r['Monto']) || 0;
+      if ((r['Tipo'] || '').toLowerCase() === 'ingreso') totalIngresos += monto;
+      else totalGastos += monto;
+    });
+
+    const balance = totalIngresos - totalGastos;
+
+    document.getElementById('totalIngresos').textContent = '$' + totalIngresos.toLocaleString('en-US', {minimumFractionDigits:2});
+    document.getElementById('totalGastos').textContent = '$' + totalGastos.toLocaleString('en-US', {minimumFractionDigits:2});
+    document.getElementById('balanceNeto').textContent = '$' + balance.toLocaleString('en-US', {minimumFractionDigits:2});
+    document.getElementById('balanceNeto').style.color = balance >= 0 ? '#10b981' : '#ef4444';
+    document.getElementById('totalRegistros').textContent = rows.length;
+
+    const tbody = document.querySelector('#tablePagosGastos tbody');
+    tbody.innerHTML = rows.length ? rows.map((r, i) => {
+      const tipoCls = (r['Tipo'] || '').toLowerCase() === 'ingreso' ? 'badge-green' : 'badge-red';
+      const id = r['ID'] || '';
+      return `<tr>
+        <td><span class="badge badge-blue">${id}</span></td>
+        <td><span class="badge ${tipoCls}">${r['Tipo'] || '—'}</span></td>
+        <td>${r['Fecha'] || '—'}</td>
+        <td><strong>${r['Descripción'] || '—'}</strong></td>
+        <td>${r['Categoría'] || '—'}</td>
+        <td><strong>$${parseFloat(r['Monto'] || 0).toLocaleString('en-US', {minimumFractionDigits:2})}</strong></td>
+        <td>${r['Método de Pago'] || '—'}</td>
+        <td title="${r['Notas'] || ''}">${truncate(r['Notas'], 30)}</td>
+        <td>${r['Fecha de Registro'] || '—'}</td>
+        <td><button class="btn btn-sm btn-outline" onclick="descargarVoucher('${id}')" title="Descargar Voucher PDF"><i class="ph ph-download"></i></button></td>
+      </tr>`;
+    }).join('') : emptyState();
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+function formPagosGastos() {
+  return `<form onsubmit="submitForm(event,'pagos_gastos')">
+    <div class="form-grid">
+      <div class="form-group"><label>Tipo *</label>
+        <select name="tipo" required>
+          <option value="">Seleccionar...</option>
+          <option value="Ingreso">Ingreso</option>
+          <option value="Gasto">Gasto</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Fecha *</label><input name="fecha" type="date" required></div>
+      <div class="form-group full"><label>Descripción *</label><input name="descripcion" required></div>
+      <div class="form-group"><label>Categoría</label>
+        <select name="categoria">
+          <option value="">Seleccionar...</option>
+          <option value="Servicios">Servicios</option>
+          <option value="Publicidad">Publicidad</option>
+          <option value="Nómina">Nómina</option>
+          <option value="Software">Software</option>
+          <option value="Oficina">Oficina</option>
+          <option value="Pago de Cliente">Pago de Cliente</option>
+          <option value="Inversión">Inversión</option>
+          <option value="Otro">Otro</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Monto *</label><input name="monto" type="number" step="0.01" required></div>
+      <div class="form-group"><label>Método de Pago</label>
+        <select name="metodoDePago">
+          <option value="">Seleccionar...</option>
+          <option value="Transferencia">Transferencia</option>
+          <option value="Efectivo">Efectivo</option>
+          <option value="Tarjeta">Tarjeta</option>
+          <option value="PayPal">PayPal</option>
+          <option value="Otro">Otro</option>
+        </select>
+      </div>
+      <div class="form-group full"><label>Notas</label><input name="notas"></div>
+    </div>
+    <button type="submit" class="btn btn-primary btn-block">Guardar Registro</button>
+  </form>`;
+}
+
+// ── PDF: VOUCHER INDIVIDUAL ──────────────────────────────────────
+async function descargarVoucher(id) {
+  try {
+    if (typeof window.jspdf === 'undefined') {
+      showToast('Error: Librer\u00eda PDF no cargada. Recarga la p\u00e1gina.', true);
+      return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a5' });
+    const data = await fetch(`${API}/api/pagos_gastos`).then(r => r.json()).catch(() => []);
+    const r = Array.isArray(data) ? data.find(x => x['ID'] === id) : null;
+    if (!r) { showToast('Registro no encontrado', true); return; }
+
+    const azul = [59, 130, 246];
+    const gris = [150, 150, 150];
+
+    doc.setFontSize(18);
+    doc.setTextColor(azul[0], azul[1], azul[2]);
+    doc.text('COMPROBANTE DE PAGO', 105, 20, { align: 'center' });
+    doc.setTextColor(0);
+
+    doc.setDrawColor(azul[0], azul[1], azul[2]);
+    doc.setLineWidth(0.5);
+    doc.line(15, 25, 135, 25);
+
+    const yBase = 35;
+    const campos = [
+      ['ID:', r['ID'] || '\u2014'],
+      ['Tipo:', r['Tipo'] || '\u2014'],
+      ['Fecha:', r['Fecha'] || '\u2014'],
+      ['Descripci\u00f3n:', r['Descripci\u00f3n'] || '\u2014'],
+      ['Categor\u00eda:', r['Categor\u00eda'] || '\u2014'],
+      ['M\u00e9todo de Pago:', r['M\u00e9todo de Pago'] || '\u2014'],
+      ['Fecha de Registro:', r['Fecha de Registro'] || '\u2014'],
+    ];
+
+    campos.forEach(([label, val], i) => {
+      const y = yBase + i * 7;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, 20, y);
+      doc.setFont('helvetica', 'normal');
+      doc.text(val, 55, y);
+    });
+
+    const yMonto = yBase + campos.length * 7 + 5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('Monto:', 20, yMonto);
+    doc.setFontSize(16);
+    doc.setTextColor(azul[0], azul[1], azul[2]);
+    const monto = parseFloat(r['Monto'] || 0);
+    doc.text('$' + monto.toLocaleString('en-US', { minimumFractionDigits: 2 }), 55, yMonto);
+    doc.setTextColor(0);
+
+    const yNotas = yMonto + 10;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Notas:', 20, yNotas);
+    doc.setFont('helvetica', 'normal');
+    const notas = r['Notas'] || '\u2014';
+    const splitNotas = doc.splitTextToSize(notas, 100);
+    doc.text(splitNotas, 55, yNotas);
+
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.3);
+    doc.line(15, 130, 135, 130);
+    doc.setFontSize(8);
+    doc.setTextColor(gris[0], gris[1], gris[2]);
+    doc.text('ERP LUMARK - Control de Pagos y Gastos', 105, 137, { align: 'center' });
+    doc.text('Documento generado autom\u00e1ticamente', 105, 142, { align: 'center' });
+
+    doc.save('Voucher_' + id + '.pdf');
+  } catch (e) {
+    console.error(e);
+    showToast('Error al generar PDF voucher', true);
+  }
+}
+
+// ── PDF: BALANCE GENERAL ─────────────────────────────────────────
+async function descargarBalance() {
+  try {
+    if (typeof window.jspdf === 'undefined') {
+      showToast('Error: Librer\u00eda PDF no cargada. Recarga la p\u00e1gina.', true);
+      return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const data = await fetch(`${API}/api/pagos_gastos`).then(r => r.json()).catch(() => []);
+    const rows = Array.isArray(data) ? data : [];
+
+    let totalIngresos = 0;
+    let totalGastos = 0;
+    const porCategoria = {};
+
+    rows.forEach(r => {
+      const monto = parseFloat(r['Monto']) || 0;
+      const cat = r['Categor\u00eda'] || 'Sin categor\u00eda';
+      porCategoria[cat] = (porCategoria[cat] || 0) + monto;
+      if ((r['Tipo'] || '').toLowerCase() === 'ingreso') totalIngresos += monto;
+      else totalGastos += monto;
+    });
+
+    const balance = totalIngresos - totalGastos;
+    const azul = [59, 130, 246];
+
+    doc.setFontSize(20);
+    doc.setTextColor(azul[0], azul[1], azul[2]);
+    doc.text('BALANCE GENERAL', 105, 20, { align: 'center' });
+    doc.setTextColor(100);
+    doc.setFontSize(12);
+    doc.text('ERP LUMARK - Estados Financieros', 105, 28, { align: 'center' });
+    doc.text('Al ' + new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }), 105, 35, { align: 'center' });
+    doc.setTextColor(0);
+
+    doc.setDrawColor(azul[0], azul[1], azul[2]);
+    doc.setLineWidth(0.5);
+    doc.line(15, 39, 195, 39);
+
+    let y = 52;
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('RESUMEN', 105, y, { align: 'center' });
+    y += 10;
+
+    doc.setFontSize(11);
+    const fmoney = v => '$' + v.toLocaleString('es-MX', { minimumFractionDigits: 2 });
+
+    doc.setFont('helvetica', 'normal');
+    doc.text('Total Ingresos:', 25, y);
+    doc.text(fmoney(totalIngresos), 120, y);
+    y += 8;
+    doc.text('Total Gastos:', 25, y);
+    doc.text(fmoney(totalGastos), 120, y);
+    y += 8;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Balance Neto:', 25, y);
+    doc.text(fmoney(balance), 120, y);
+    y += 10;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text('Total de registros: ' + rows.length, 25, y);
+    y += 8;
+
+    doc.setDrawColor(200, 200, 200);
+    doc.line(15, y, 195, y);
+    y += 8;
+
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DETALLE POR CATEGOR\u00cdA', 105, y, { align: 'center' });
+    y += 10;
+
+    const catData = Object.entries(porCategoria).sort((a, b) => b[1] - a[1]);
+    if (catData.length > 0) {
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.setFillColor(azul[0], azul[1], azul[2]);
+      doc.setTextColor(255);
+      doc.rect(25, y - 5, 50, 7, 'F');
+      doc.rect(75, y - 5, 50, 7, 'F');
+      doc.text('Categor\u00eda', 27, y);
+      doc.text('Monto', 77, y);
+      doc.setTextColor(0);
+      y += 7;
+
+      doc.setFont('helvetica', 'normal');
+      catData.forEach(([cat, monto]) => {
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.text(cat, 27, y);
+        doc.text(fmoney(monto), 77, y);
+        y += 6;
+      });
+      y += 8;
+    } else {
+      y += 4;
+    }
+
+    if (rows.length > 0) {
+      if (y > 240) { doc.addPage(); y = 20; }
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('REGISTROS', 105, y, { align: 'center' });
+      y += 10;
+
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setFillColor(azul[0], azul[1], azul[2]);
+      doc.setTextColor(255);
+      const colW = [12, 10, 14, 28, 16, 18, 16, 20];
+      const colX = [10];
+      for (let i = 0; i < colW.length - 1; i++) colX.push(colX[i] + colW[i]);
+      const headers = ['ID', 'Tipo', 'Fecha', 'Descripci\u00f3n', 'Categor\u00eda', 'Monto', 'M\u00e9todo', 'Notas'];
+      headers.forEach((h, i) => {
+        doc.rect(colX[i], y - 4, colW[i], 6, 'F');
+        doc.text(h, colX[i] + 1, y);
+      });
+      doc.setTextColor(0);
+      y += 6;
+
+      doc.setFont('helvetica', 'normal');
+      rows.forEach(r => {
+        if (y > 280) { doc.addPage(); y = 20; }
+        const vals = [
+          r['ID'] || '', r['Tipo'] || '', r['Fecha'] || '',
+          r['Descripci\u00f3n'] || '', r['Categor\u00eda'] || '',
+          fmoney(parseFloat(r['Monto'] || 0)),
+          r['M\u00e9todo de Pago'] || '', r['Notas'] || ''
+        ];
+        vals.forEach((v, i) => doc.text(v, colX[i] + 1, y));
+        y += 5;
+      });
+    }
+
+    doc.save('Balance_General_ERP_LUMARK.pdf');
+  } catch (e) {
+    console.error(e);
+    showToast('Error al generar Balance PDF', true);
+  }
+}
+
 async function loadActividades() {
   setTodayDate();
   // Ensure we have asesoresData for dropdown
@@ -2125,40 +2031,3 @@ async function submitActividad(e) {
     submitBtn.textContent = 'Guardar Actividad';
   }
 }
-// ── CALENDLY INTEGRATION ──────────────────────────────────────────
-window.addEventListener('message', async (e) => {
-  let data = e.data;
-  if (typeof data === 'string') {
-    try { data = JSON.parse(data); } catch(err) { return; }
-  }
-  
-  if (data && data.event && data.event.includes('calendly')) {
-    console.log('Calendly Event:', data.event, data.payload);
-  }
-
-  if (data && data.event === 'calendly.event_scheduled') {
-    const eventUri = data.payload.event.uri;
-    const inviteeUri = data.payload.invitee.uri;
-    
-    try {
-      showToast('Sincronizando cita de Calendly...', false);
-      const res = await fetch(`${API}/api/sync-calendly`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventUri, inviteeUri })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al sincronizar cita');
-      showToast('Cita guardada en Google Sheets');
-      
-      // Fire the webhook for n8n just like the old modal form did
-      if (typeof dispatchWebhook === 'function') {
-         dispatchWebhook('citas', 'create', data.id, data.data);
-      }
-      
-      loadCitas(); // Refresh data in background
-    } catch(err) {
-      showToast(err.message, true);
-    }
-  }
-});
